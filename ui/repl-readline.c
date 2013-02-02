@@ -672,6 +672,7 @@ void jl_prep_terminal (int meta_flag)
     rl_instream = stdin;
     rl_prep_terminal(1);
     rl_instream = rl_in;
+    rl_prep_terminal(1);
 #ifdef __WIN32__
     if (!repl_sigint_handler_installed) {
         if (SetConsoleCtrlHandler((PHANDLER_ROUTINE)repl_sigint_handler,1))
@@ -703,6 +704,10 @@ void jl_deprep_terminal ()
     rl_instream = rl_in;
 }
 
+#include "uv.h"
+static uv_pipe_t uv_pipe_from_jl;
+static uv_pipe_t uv_pipe_to_rl;
+
 void init_repl_environment(int argc, char *argv[])
 {
     disable_history = 0;
@@ -722,7 +727,14 @@ void init_repl_environment(int argc, char *argv[])
     rl_catch_signals = 0;
     rl_prep_term_function=&jl_prep_terminal;
     rl_deprep_term_function=&jl_deprep_terminal;
-    rl_instream=fopen("/dev/null","r");
+#ifndef __WIN32__
+    uv_pipe_init(uv_default_loop(), &uv_pipe_from_jl, UV_PIPE_WRITEABLE);
+    uv_pipe_init(uv_default_loop(), &uv_pipe_to_rl, UV_PIPE_READABLE|UV_PIPE_SPAWN_SAFE);
+    uv_pipe_link(&uv_pipe_to_rl, &uv_pipe_from_jl);
+    rl_instream = fdopen(uv_pipe_to_rl.accepted_fd, "w");
+#else
+    rl_instream = open("/dev/null","r");
+#endif 
     prompt_length = strlen(prompt_plain);
     init_history();
     rl_startup_hook = (Function*)init_rl;
@@ -734,10 +746,24 @@ void repl_callback_enable()
     rl_callback_handler_install(prompt_string, jl_input_line_callback);
 }
 
-#include "uv.h"
-
+static void jl_freeBuffer(uv_write_t* req, int status) {
+    size_t nread = 1;
+    if (req->data) {
+        size_t* data = (size_t*)req->data;
+        nread = data[-1];
+        free(data-1);
+    }
+    free(req);
+    size_t i;
+    for (i = 0; i < nread; i++) {
+        if (!callback_en)
+            break;
+        rl_callback_read_char();
+    }
+}
 void jl_readBuffer(char *base, ssize_t nread)
 {
+#ifdef __WIN32__
     char *start = base;
     while(*start != 0 && nread > 0) {
         rl_stuff_char(*start);
@@ -745,6 +771,15 @@ void jl_readBuffer(char *base, ssize_t nread)
         nread--;
     }
     rl_callback_read_char();
+#else
+    uv_write_t *uvw = malloc(sizeof(uv_write_t));
+    char *data = malloc(nread+sizeof(size_t))+sizeof(size_t);
+    memcpy(data, base, nread);
+    uv_buf_t buf[]  = {{.base = data, .len = nread}};
+    uvw->data = data;
+    int err = uv_write(uvw, (uv_stream_t*)&uv_pipe_from_jl, buf, 1, &jl_freeBuffer);
+    (void)err;
+#endif
 }
 
 void restart(void)
