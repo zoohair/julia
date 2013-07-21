@@ -202,7 +202,7 @@ ndigits(x::Integer) = ndigits(unsigned(abs(x)))
 
 ## integer to string functions ##
 
-const dig_syms = uint8(['0':'9','a':'z','A':'Z'])
+const dig_syms = uint8(['0':'9';'a':'z';'A':'Z'])
 
 function bin(x::Unsigned, pad::Int, neg::Bool)
     i = neg + max(pad,sizeof(x)<<3-leading_zeros(x))

@@ -150,7 +150,7 @@ end
 
 srand(0xdeadbeef)
 
-for n in [0:10, 100, 1000]
+for n in [0:10; 100; 1000]
     r = 1:10
     v = rand(1:10,n)
     h = hist(v,r)

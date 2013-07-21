@@ -25,7 +25,7 @@ a = convert(Array, d)
 if nprocs() < 4
     remotecall_fetch(1, () -> addprocs(4 - nprocs()))
 end
-workloads = hist(@parallel((a,b)->[a,b], for i=1:7; myid(); end), nprocs())[2]
+workloads = hist(@parallel((a,b)->[a;b], for i=1:7; myid(); end), nprocs())[2]
 @test max(workloads) - min(workloads) <= 1
 
 # @parallel reduction should work even with very short ranges

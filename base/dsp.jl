@@ -83,8 +83,8 @@ function conv{T<:LinAlg.BlasFloat}(u::Vector{T}, v::Vector{T})
     nv = length(v)
     n = nu + nv - 1
     np2 = n > 1024 ? nextprod([2,3,5], n) : nextpow2(n)
-    upad = [u, zeros(T, np2 - nu)]
-    vpad = [v, zeros(T, np2 - nv)]
+    upad = [u; zeros(T, np2 - nu)]
+    vpad = [v; zeros(T, np2 - nv)]
     if T <: Real
         p = plan_rfft(upad)
         y = irfft(p(upad).*p(vpad), np2)

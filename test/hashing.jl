@@ -3,7 +3,7 @@ types = {
     Rational{Int8}, Rational{Uint8}, Rational{Int16}, Rational{Uint16},
     Rational{Int32}, Rational{Uint32}, Rational{Int64}, Rational{Uint64}
 }
-vals = [
+vals = vcat(
     typemin(Int64),
     -integer(maxintfloat(Float64))+(-4:1),
     typemin(Int32),
@@ -13,7 +13,7 @@ vals = [
     typemax(Int32),
     integer(maxintfloat(Float64))+(-1:4),
     typemax(Int64),
-]
+)
 
 for T=types, S=types, x=vals
     a = convert(T,x)

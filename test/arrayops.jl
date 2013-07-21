@@ -146,7 +146,7 @@ let
     @test x == -12
     X = get(A, -5:5, nan(Float32))
     @test eltype(X) == Float32
-    @test isnan(X) == [trues(6),falses(5)]
+    @test isnan(X) == [trues(6);falses(5)]
     @test X[7:11] == 1:5
     X = get(A, (2:4, 9:-2:-13), 0)
     Xv = zeros(Int, 3, 12)
@@ -168,7 +168,7 @@ v = pop!(l)
 
 # concatenation
 @test isequal([ones(2,2)  2*ones(2,1)], [1 1 2; 1 1 2])
-@test isequal([ones(2,2), 2*ones(1,2)], [1 1; 1 1; 2 2])
+@test isequal([ones(2,2); 2*ones(1,2)], [1 1; 1 1; 2 2])
 
 # typed array literals
 X = Float64[1 2 3]
@@ -482,7 +482,7 @@ for idx in {1, 2, 5, 9, 10, 1:0, 2:1, 1:1, 2:2, 1:2, 2:4, 9:8, 10:9, 9:9, 10:10,
     for repl in {[], [11], [11,22], [11,22,33,44,55]}
         a = [1:10]; acopy = copy(a)
         @test splice!(a, idx, repl) == acopy[idx]
-        @test a == [acopy[1:(first(idx)-1)], repl, acopy[(last(idx)+1):end]]
+        @test a == [acopy[1:(first(idx)-1)]; repl; acopy[(last(idx)+1):end]]
     end
 end
 

@@ -360,7 +360,7 @@ speye{T}(S::SparseMatrixCSC{T}) = speye(T, size(S, 1), size(S, 2))
 function speye(T::Type, m::Integer, n::Integer)
     x = min(m,n)
     rowval = [1:x]
-    colptr = [rowval, fill(int(x+1), n+1-x)]
+    colptr = [rowval; fill(int(x+1), n+1-x)]
     nzval  = ones(T, x)
     return SparseMatrixCSC(m, n, colptr, rowval, nzval)
 end

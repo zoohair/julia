@@ -114,7 +114,7 @@ end
 
 string(a::ByteString, b::ByteString, c::ByteString...) =
     # ^^ at least one must be UTF-8 or the ASCII-only method would get called
-    UTF8String([a.data,b.data,map(s->s.data,c)...])
+    UTF8String([a.data;b.data;map(s->s.data,c)...])
 
 ucfirst(s::UTF8String) = string(uppercase(s[1]), s[2:])
 lcfirst(s::UTF8String) = string(lowercase(s[1]), s[2:])
