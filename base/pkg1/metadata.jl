@@ -95,7 +95,7 @@ function versions(pkgs)
 end
 versions() = versions(packages())
 
-hash(v::Version) = hash([v.(n) for n in Version.names])
+hash(v::Version) = hash([getfield(v,n) for n in Version.names])
 
 type VersionSet
     package::ByteString
@@ -122,7 +122,7 @@ function in(v::Version, s::VersionSet)
     return isempty(s.versions)
 end
 
-hash(s::VersionSet) = hash([s.(n) for n in VersionSet.names])
+hash(s::VersionSet) = hash([getfield(s,n) for n in VersionSet.names])
 
 function parse_requires(readable)
     reqs = VersionSet[]

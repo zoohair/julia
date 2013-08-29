@@ -334,8 +334,9 @@
   (or (symbol? e)
       (and (length= e 3) (eq? (car e) '|.|)
 	   (or (atom? (cadr e)) (sym-ref? (cadr e)))
-	   (pair? (caddr e)) (eq? (car (caddr e)) 'quote)
-	   (symbol? (cadr (caddr e))))))
+	   (or (and (pair? (caddr e)) (eq? (car (caddr e)) 'quote)
+		    (symbol? (cadr (caddr e))))
+	       (symbol? (caddr e))))))
 
 (define (method-def-expr- name sparams argl body)
   (receive
@@ -1219,20 +1220,29 @@
 		   `(block (null)))
 
    (pattern-lambda (|.| a b)
-		   `(call (top getfield) ,a ,b))
+		   (begin
+		     (if (not (or (symbol? b)
+				  (and (quoted? b) (symbol? (cadr b)))))
+			 (error (string "invalid field name " b)))
+		     `(call (top getfield) ,a ,(if (symbol? b)
+						   `(quote ,b)
+						   b))))
 
    (pattern-lambda (in a b) `(call in ,a ,b))
 
    (pattern-lambda (= (|.| a b) rhs)
-		   (let ((aa (if (atom? a) a (gensy)))
-			 (bb (if (or (atom? b) (quoted? b)) b (gensy))))
-		     `(block
-		       ,@(if (eq? aa a) '() `((= ,aa ,a)))
-		       ,@(if (eq? bb b) '() `((= ,bb ,b)))
-		       (call (top setfield) ,aa ,bb
-			     (call (top convert)
-				   (call (top fieldtype) ,aa ,bb)
-				   ,rhs)))))
+		   (begin
+		     (if (not (or (symbol? b)
+				  (and (quoted? b) (symbol? (cadr b)))))
+			 (error (string "invalid field name " b)))
+		     (let ((aa (if (atom? a) a (gensy)))
+			   (bb (if (symbol? b) `(quote ,b) b)))
+		       `(block
+			 ,@(if (eq? aa a) '() `((= ,aa ,a)))
+			 (call (top setfield) ,aa ,bb
+			       (call (top convert)
+				     (call (top fieldtype) ,aa ,bb)
+				     ,rhs))))))
 
    (pattern-lambda (abstract sig)
 		   (receive (name params super) (analyze-type-sig sig)

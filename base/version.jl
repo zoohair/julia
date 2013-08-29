@@ -145,7 +145,7 @@ function isless(a::VersionNumber, b::VersionNumber)
     return false
 end
 
-hash(v::VersionNumber) = hash([v.(n) for n in VersionNumber.names])
+hash(v::VersionNumber) = hash([getfield(v,n) for n in VersionNumber.names])
 
 ## julia version info
 

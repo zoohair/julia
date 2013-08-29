@@ -34,7 +34,7 @@ function _deepcopy_t(x, T::DataType, stackdict::ObjectIdDict)
     stackdict[x] = ret
     for f in T.names
         if isdefined(x,f)
-            ret.(f) = deepcopy_internal(x.(f), stackdict)
+            setfield(ret, f, deepcopy_internal(getfield(x,f), stackdict))
         end
     end
     return ret

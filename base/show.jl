@@ -16,7 +16,7 @@ function show(io::IO, x::ANY)
             if !isdefined(x, f)
                 print(io, undef_ref_str)
             else
-                show(io, x.(f))
+                show(io, getfield(x,f))
             end
             if i < n
                 print(io, ',')
@@ -287,9 +287,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int)
         if is_quoted(args[2]) 
             show_unquoted(io, unquoted(args[2]), indent + indent_width)
         else
-            print(io, '(')
             show_unquoted(io, args[2], indent + indent_width)
-            print(io, ')')
         end                  
     elseif (in(head, _expr_infix) && nargs==2) || (is(head,:(:)) && nargs==3)
         show_list(io, args, head, indent)
