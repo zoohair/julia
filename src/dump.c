@@ -1071,6 +1071,10 @@ jl_value_t *jl_ast_rettype(jl_lambda_info_t *li, jl_value_t *ast)
 {
     if (jl_is_expr(ast))
         return jl_lam_body((jl_expr_t*)ast)->etype;
+//    jl_value_t* old_ast = jl_tupleref(ast,0); //((jl_weakref_t*)jl_tupleref(ast, 0))->value;
+//    if (old_ast != jl_nothing)
+//        return jl_lam_body((jl_expr_t*)old_ast)->etype;
+    ast = jl_tupleref(ast, 1);
     tree_literal_values = li->module->constant_table;
     ios_t src;
     jl_array_t *bytes = (jl_array_t*)ast;
@@ -1089,6 +1093,7 @@ jl_value_t *jl_ast_rettype(jl_lambda_info_t *li, jl_value_t *ast)
 DLLEXPORT
 jl_value_t *jl_compress_ast(jl_lambda_info_t *li, jl_value_t *ast)
 {
+    assert(jl_is_expr(ast));
     ios_t dest;
     ios_mem(&dest, 0);
     jl_array_t *last_tlv = tree_literal_values;
@@ -1111,6 +1116,8 @@ jl_value_t *jl_compress_ast(jl_lambda_info_t *li, jl_value_t *ast)
         li->module->constant_table = NULL;
     }
     tree_literal_values = last_tlv;
+    v = (jl_value_t*)jl_tuple2(jl_gc_new_weakref(jl_nothing),v); // <- jl_gc_new_weakref here causes a segfault
+//    v = (jl_value_t*)jl_tuple2(jl_gc_new_weakref(ast),v);
     if (en)
         jl_gc_enable();
     return v;
@@ -1119,7 +1126,10 @@ jl_value_t *jl_compress_ast(jl_lambda_info_t *li, jl_value_t *ast)
 DLLEXPORT
 jl_value_t *jl_uncompress_ast(jl_lambda_info_t *li, jl_value_t *data)
 {
-    jl_array_t *bytes = (jl_array_t*)data;
+//    jl_value_t *old_ast = jl_tupleref(data,0); //((jl_weakref_t*)jl_tupleref(data,0))->value;
+//    if (old_ast != jl_nothing)
+//        return old_ast;
+    jl_array_t *bytes = (jl_array_t*)jl_tupleref(data,1);
     tree_literal_values = li->module->constant_table;
     ios_t src;
     ios_mem(&src, 0);

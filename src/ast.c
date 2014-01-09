@@ -816,7 +816,7 @@ jl_value_t *jl_prepare_ast(jl_lambda_info_t *li, jl_tuple_t *sparams)
     spenv = jl_tuple_tvars_to_symbols(sparams);
     if (!jl_is_expr(ast)) {
         ast = jl_uncompress_ast(li, ast);
-        ast = dont_copy_ast(ast, sparams, 1);
+        ast = copy_ast(ast, sparams, 1);
     }
     else {
         ast = copy_ast(ast, sparams, 1);

@@ -1837,7 +1837,7 @@ function inlineable(f, e::Expr, sv, enclosing_ast)
     needcopy = true
     if !isa(ast,Expr)
         ast = ccall(:jl_uncompress_ast, Any, (Any,Any), linfo, ast)
-        needcopy = false
+        #needcopy = false
     end
     ast = ast::Expr
     for vi in ast.args[2][2]

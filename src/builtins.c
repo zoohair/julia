@@ -1036,6 +1036,9 @@ DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v)
     if (v == NULL) {
         n += JL_PRINTF(out, "<null>");
     }
+    else if (v->type == NULL) {
+        n += JL_PRINTF(out, "<?::null>");
+    }
     else if (jl_is_lambda_info(v)) {
         jl_lambda_info_t *li = (jl_lambda_info_t*)v;
         n += jl_static_show(out, (jl_value_t*)li->module);
