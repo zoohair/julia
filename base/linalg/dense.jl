@@ -417,26 +417,28 @@ function (\)(A::StridedMatrix, B::StridedVecOrMat)
     return qrfact(A,pivot=eltype(A)<:BlasFloat)\B
 end
 
-## Moore-Penrose inverse
-function pinv{T}(A::StridedMatrix{T})
+## Moore-Penrose pseudoinverse
+function pinv{T}(A::StridedMatrix{T}; cond::Real=1/(eps(real(float(one(T))))*maximum(size(A))), rank::Integer=minimum(size(A)))
     SVD         = svdfact(A, thin=true)
     S           = eltype(SVD[:S])
     m, n        = size(A)
     (m == 0 || n == 0) && return Array(S, n, m)
     Sinv        = zeros(S, length(SVD[:S]))
-    index       = SVD[:S] .> eps(real(float(one(T))))*max(m,n)*maximum(SVD[:S])
+    index       = SVD[:S] .> maximum(SVD[:S])/cond
     Sinv[index] = one(S) ./ SVD[:S][index]
-    return SVD[:Vt]'scale(Sinv, SVD[:U]')
+    Sinv[rank+1:end] = zero(S) 
+    return SVD[:Vt]'*Diagonal(Sinv)*SVD[:U]'
 end
-pinv(a::StridedVector) = pinv(reshape(a, length(a), 1))
-pinv(x::Number) = one(x)/x
+pinv(a::StridedVector; cond::Real=Inf, rank::Integer=size(a,1)) = pinv(reshape(a, length(a), 1), cond=cond, rank=rank)
+pinv(x::Number; cond::Real=Inf, rank::Integer=1) = rank==0 ? zero(x) : one(x)/x
 
 ## Basis for null space
-function null{T}(A::StridedMatrix{T})
+function null{T}(A::StridedMatrix{T}, cond::Real=1/(maximum(size(A))*eps(real(float(one(T))))), rank::Integer=minimum(size(A)))
     m, n = size(A)
     (m == 0 || n == 0) && return eye(T, n)
     SVD = svdfact(A, thin=false)
-    indstart = sum(SVD[:S] .> max(m,n)*maximum(SVD[:S])*eps(eltype(SVD[:S]))) + 1
+    indstart = sum(SVD[:S] .> maximum(SVD[:S])/cond) + 1
+    #TODO implement rank cutoff
     return SVD[:V][:,indstart:end]
 end
 null(a::StridedVector) = null(reshape(a, length(a), 1))

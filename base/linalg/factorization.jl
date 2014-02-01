@@ -384,13 +384,14 @@ function A_mul_Bc{TA,TB}(A::AbstractArray{TA}, B::Union(QRCompactWYQ{TB},QRPacke
 end
 
 # Julia implementation similarly to xgelsy
-function A_ldiv_B!{T<:BlasFloat}(A::Union(QRCompactWY{T},QRPivoted{T}), B::StridedMatrix{T}, rcond::Real)
+#XXX
+function A_ldiv_B!{T<:BlasFloat}(A::Union(QRCompactWY{T},QRPivoted{T}), B::StridedMatrix{T}; rcond::Real, rank::Integer)
     mA, nA = size(A.factors)
     nr = min(mA,nA)
     nrhs = size(B, 2)
-    if nr == 0 return zeros(0, nrhs), 0 end
+    nr == 0 && return zeros(0, nrhs), 0
     ar = abs(A.factors[1])
-    if ar == 0 return zeros(nr, nrhs), 0 end
+    ar == 0 && return zeros(nr, nrhs), 0
     rnk = 1
     xmin = ones(T, 1)
     xmax = ones(T, 1)
