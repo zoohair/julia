@@ -1,15 +1,23 @@
 module LineEdit
 
-using Base.Terminals
+using Base:
+    Terminals,
+    ensureroom,
+    peek
 
-import Base.Terminals: raw!, width, height, cmove, getX,
-                       getY, clear_line, beep
+export
+    @keymap,
+    ModalInterface,
+    Prompt,
+    edit_insert,
+    reset_state,
+    run_interface,
+    transition
 
-import Base: ensureroom, peek, show
+import Base:
+    show
 
 abstract TextInterface
-
-export run_interface, Prompt, ModalInterface, transition, reset_state, edit_insert
 
 immutable ModalInterface <: TextInterface
     modes
@@ -648,7 +656,12 @@ end
 # If we ever actually want to match \0 in input, this will have to be reworked
 function normalize_keymap(keymap::Dict)
     ret = Dict{Char,Any}()
-    for key in keys(keymap)
+    ret['\uffff'] = Dict{Symbol,Any}()
+    for (key,val) in keymap
+        if isa(key,Symbol)
+            ret['\uffff'][key] = val
+            continue
+        end
         newkey = normalize_key(key)
         current = ret
         i = start(newkey)
@@ -678,6 +691,7 @@ end
 keymap_gen_body(keymaps, body::Expr, level) = body
 keymap_gen_body(keymaps, body::Function, level) = keymap_gen_body(keymaps, :($(body)(s)))
 keymap_gen_body(keymaps, body::Char, level) = keymap_gen_body(keymaps, keymaps[body])
+keymap_gen_body(keymaps, body::Symbol, level) = keymap_gen_body(keymaps, keymaps['\uffff'][body], level)
 keymap_gen_body(keymaps, body::Nothing, level) = nothing
 function keymap_gen_body(keymaps, body::String, level)
     if length(body) == 1
@@ -713,7 +727,7 @@ function keymap_gen_body(dict, subdict::Dict, level)
     end
 
     for c in keys(subdict)
-        c == '\0' && continue
+        (c == '\0' || c == '\uffff') && continue
         cblock = Expr(:if, :($bc == $c))
         push!(cblock.args, keymap_gen_body(dict, subdict[c], level+1))
         push!(cblock.args, last_if)
@@ -723,8 +737,6 @@ function keymap_gen_body(dict, subdict::Dict, level)
     push!(block.args, last_if)
     return block
 end
-
-export @keymap
 
 # deep merge where target has higher precedence
 function keymap_merge!(target::Dict, source::Dict)
@@ -1201,13 +1213,19 @@ function history_keymap(hist)
         # ^N
         14 => :(LineEdit.history_next(s, $hist)),
         # Up Arrow
-        "\e[A" => :(LineEdit.edit_move_up(s) || LineEdit.history_prev(s, $hist)),
+        "\e[A" => :previous_history,
         # Down Arrow
-        "\e[B" => :(LineEdit.edit_move_down(s) || LineEdit.history_next(s, $hist)),
+        "\e[B" => :next_history,
         # Page Up
-        "\e[5~" => :(LineEdit.history_prev_prefix(s, $hist)),
+        "\e[5~" => :history_search_backward,
         # Page Down
-        "\e[6~" => :(LineEdit.history_next_prefix(s, $hist))
+        "\e[6~" => :history_search_forward,
+
+        :history_search_backward => :(LineEdit.history_prev_prefix(s, $hist)),
+        :history_search_forward  => :(LineEdit.history_next_prefix(s, $hist)),
+
+        :next_history     => :(LineEdit.edit_move_down(s) || LineEdit.history_next(s, $hist)),
+        :previous_history => :(LineEdit.edit_move_up(s) || LineEdit.history_prev(s, $hist)),
     }
 end
 

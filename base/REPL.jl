@@ -27,6 +27,20 @@ import Base.LineEdit:
     history_prev_prefix,
     history_search
 
+type Options
+    keybindings::Dict{Any,Any}
+end
+
+const options = Options(Dict())
+
+function bind(d::Dict)
+    global options
+    for (k,v) in d
+        # XXX: error checking
+        options.keybindings[k] = v
+    end
+end
+
 abstract AbstractREPL
 
 answer_color(::AbstractREPL) = ""
@@ -480,7 +494,7 @@ function reset(d::REPLDisplay{LineEditREPL})
     print(Base.text_colors[:normal])
 end
 
-function setup_interface(d::REPLDisplay, req, rep; extra_repl_keymap = Dict{Any,Any}[])
+function setup_interface(d::REPLDisplay, req, rep)
     ###
     #
     # This function returns the main interface that describes the REPL
@@ -567,11 +581,6 @@ function setup_interface(d::REPLDisplay, req, rep; extra_repl_keymap = Dict{Any,
 
     hkp, hkeymap = LineEdit.setup_search_keymap(hp)
 
-    # Canonicalize user keymap input
-    if isa(extra_repl_keymap, Dict)
-        extra_repl_keymap = [extra_repl_keymap]
-    end
-
     const repl_keymap = {
         ';' => function (s)
             if isempty(s) || position(LineEdit.buffer(s)) == 0
@@ -633,8 +642,11 @@ function setup_interface(d::REPLDisplay, req, rep; extra_repl_keymap = Dict{Any,
         end,
     }
 
-    a = Dict{Any,Any}[hkeymap, repl_keymap, LineEdit.history_keymap(hp), LineEdit.default_keymap, LineEdit.escape_defaults]
-    prepend!(a, extra_repl_keymap)
+    global options
+    a = Dict{Any,Any}[options.keybindings, hkeymap, repl_keymap,
+                      LineEdit.history_keymap(hp),
+                      LineEdit.default_keymap,
+                      LineEdit.escape_defaults]
 
     main_prompt.keymap_func = @eval @LineEdit.keymap $(a)
 

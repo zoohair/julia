@@ -5,6 +5,8 @@ export
     UnixTerminal,
     TerminalBuffer,
     TTYTerminal,
+    beep,
+    clear_line,
     cmove,
     cmove_col,
     cmove_down,
@@ -19,8 +21,10 @@ export
     getX,
     getY,
     hascolor,
+    height,
     pos,
     raw!,
+    width,
     writepos
 
 import Base:
