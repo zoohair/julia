@@ -283,6 +283,8 @@ import .Dates: Date, DateTime, now
 # nullable types
 include("nullable.jl")
 
+include("threading.jl")
+
 function __init__()
     # Base library init
     reinit_stdio()
