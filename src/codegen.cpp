@@ -155,6 +155,7 @@
 #include <set>
 #include <cstdio>
 #include <cassert>
+#include <mutex>
 using namespace llvm;
 
 extern "C" {
@@ -531,12 +532,20 @@ static void jl_rethrow_with_add(const char *fmt, ...)
     jl_rethrow();
 }
 
+std::mutex codegen_mutex;
+
 // --- entry point ---
 //static int n_emit=0;
 static Function *emit_function(jl_lambda_info_t *lam, bool cstyle);
 //static int n_compile=0;
 static Function *to_function(jl_lambda_info_t *li, bool cstyle)
 {
+    bool locked = false;
+    if(!nested_compile)
+    {  
+        codegen_mutex.lock();
+        locked = true;
+    }
     JL_SIGATOMIC_BEGIN();
     assert(!li->inInference);
     BasicBlock *old = nested_compile ? builder.GetInsertBlock() : NULL;
@@ -558,6 +567,8 @@ static Function *to_function(jl_lambda_info_t *li, bool cstyle)
             builder.SetCurrentDebugLocation(olddl);
         }
         JL_SIGATOMIC_END();
+        if(locked)
+            codegen_mutex.unlock();
         jl_rethrow_with_add("error compiling %s", li->name->name);
     }
     assert(f != NULL);
@@ -591,6 +602,8 @@ static Function *to_function(jl_lambda_info_t *li, bool cstyle)
         builder.SetCurrentDebugLocation(olddl);
     }
     JL_SIGATOMIC_END();
+    if(locked)
+        codegen_mutex.unlock();
     return f;
 }
 
