@@ -157,7 +157,6 @@
 #include <set>
 #include <cstdio>
 #include <cassert>
-#include <mutex>
 using namespace llvm;
 
 extern "C" {
@@ -561,7 +560,7 @@ static void jl_rethrow_with_add(const char *fmt, ...)
     jl_rethrow();
 }
 
-std::mutex codegen_mutex;
+static uv_mutex_t codegen_mutex;
 
 // --- entry point ---
 //static int n_emit=0;
@@ -572,7 +571,7 @@ static Function *to_function(jl_lambda_info_t *li, bool cstyle)
     bool locked = false;
     if(!nested_compile)
     {  
-        codegen_mutex.lock();
+        uv_mutex_lock(&codegen_mutex);
         locked = true;
     }
     JL_SIGATOMIC_BEGIN();
@@ -597,7 +596,7 @@ static Function *to_function(jl_lambda_info_t *li, bool cstyle)
         }
         JL_SIGATOMIC_END();
         if(locked)
-            codegen_mutex.unlock();
+          uv_mutex_unlock(&codegen_mutex);
         jl_rethrow_with_add("error compiling %s", li->name->name);
     }
     assert(f != NULL);
@@ -632,7 +631,7 @@ static Function *to_function(jl_lambda_info_t *li, bool cstyle)
     }
     JL_SIGATOMIC_END();
     if(locked)
-        codegen_mutex.unlock();
+        uv_mutex_unlock(&codegen_mutex);
     return f;
 }
 
@@ -4883,6 +4882,8 @@ extern "C" void jl_init_codegen(void)
                                          (void*)&restore_arg_area_loc);
 
     typeToTypeId = jl_alloc_cell_1d(16);
+    
+    uv_mutex_init(&codegen_mutex);
 }
 
 /*
