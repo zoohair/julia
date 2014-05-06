@@ -398,10 +398,17 @@ extern jl_function_t *jl_typeinf_func;
   can be equal to "li" if not applicable.
 */
 int jl_in_inference = 0;
+extern uv_mutex_t inference_mutex;
 void jl_type_infer(jl_lambda_info_t *li, jl_tuple_t *argtypes,
                    jl_lambda_info_t *def)
 {
     int last_ii = jl_in_inference;
+    int locked = 0;
+    if(!jl_in_inference)
+    {
+        uv_mutex_lock(&inference_mutex);
+        locked = 1;
+    }
     jl_in_inference = 1;
     if (jl_typeinf_func != NULL) {
         // TODO: this should be done right before code gen, so if it is
@@ -427,6 +434,8 @@ void jl_type_infer(jl_lambda_info_t *li, jl_tuple_t *argtypes,
         li->inInference = 0;
     }
     jl_in_inference = last_ii;
+    if(locked)
+      uv_mutex_unlock(&inference_mutex);
 }
 
 static jl_value_t *nth_slot_type(jl_tuple_t *sig, size_t i)
@@ -483,10 +492,20 @@ static int jl_is_specializable_tuple(jl_tuple_t *t)
 static jl_value_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
                               jl_sym_t *name, int lim);
 
+extern uv_mutex_t cache_mutex;
+int nested_cache = 0;
+
 static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
                                    jl_function_t *method, jl_tuple_t *decl,
                                    jl_tuple_t *sparams, int isstaged)
 {
+    int locked = 0;
+    if(!nested_cache)
+    {
+        uv_mutex_lock(&cache_mutex);
+        locked = 1;
+        nested_cache = 1;
+    }
     size_t i;
     int need_guard_entries = 0;
     jl_value_t *temp=NULL;
@@ -830,6 +849,11 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
         newmeth = jl_reinstantiate_method(method, li);
         (void)jl_method_cache_insert(mt, type, newmeth);
         JL_GC_POP();
+        if(locked)
+        {
+            nested_cache = 0;
+            uv_mutex_unlock(&cache_mutex);
+        }
         return newmeth;
     }
     else {
@@ -902,6 +926,11 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
         jl_type_infer(newmeth->linfo, type, method->linfo);
     }
     JL_GC_POP();
+    if(locked)
+    {
+        nested_cache = 0;
+        uv_mutex_unlock(&cache_mutex);
+    }    
     return newmeth;
 }
 
