@@ -776,6 +776,7 @@ void julia_init(char *imageFile)
     }
 #endif
 
+    jl_init_threading();
 #ifdef JL_GC_MARKSWEEP
     jl_gc_init();
     jl_gc_disable();
@@ -787,7 +788,6 @@ void julia_init(char *imageFile)
     jl_an_empty_cell = (jl_value_t*)jl_alloc_cell_1d(0);
 
     jl_init_serializer();
-    jl_init_threading();
 
     if (!imageFile) {
         jl_core_module = jl_new_module(jl_symbol("Core"));
