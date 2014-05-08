@@ -384,8 +384,8 @@ extern jl_function_t *jl_typeinf_func;
   can be equal to "li" if not applicable.
 */
 int jl_in_inference = 0;
-extern uv_mutex_t inference_mutex;
-long inference_thread_id = -1;
+extern uv_mutex_t codegen_mutex;
+extern long codegen_thread_id;
 void jl_type_infer(jl_lambda_info_t *li, jl_tuple_t *argtypes,
                    jl_lambda_info_t *def)
 {
@@ -470,10 +470,6 @@ static int jl_is_specializable_tuple(jl_tuple_t *t)
 
 static jl_value_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
                               jl_sym_t *name, int lim);
-
-extern uv_mutex_t cache_mutex;
-int nested_cache = 0;
-static long cache_thread_id = -1;
 
 static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
                                    jl_function_t *method, jl_tuple_t *decl,
@@ -820,9 +816,8 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
         JL_GC_POP();
         if(locked)
         {
-            nested_cache = 0;
-            cache_thread_id = -1;
-            uv_mutex_unlock(&cache_mutex);
+            codegen_thread_id = -1;
+            uv_mutex_unlock(&codegen_mutex);
         }
         return newmeth;
     }
@@ -872,9 +867,8 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
     JL_GC_POP();
     if(locked)
     {
-        nested_cache = 0;
-        cache_thread_id = -1;
-        uv_mutex_unlock(&cache_mutex);
+        codegen_thread_id = -1;
+        uv_mutex_unlock(&codegen_mutex);
     }    
     return newmeth;
 }
@@ -1407,19 +1401,8 @@ static void show_call(jl_value_t *F, jl_value_t **args, uint32_t nargs)
 #endif
 
 
-extern uv_mutex_t apply_gen_mutex;
-static long apply_gen_thread_id = -1;
-
 JL_CALLABLE(jl_apply_generic)
 {
-    int locked = 0;
-    if( apply_gen_thread_id != uv_thread_self() && jl_main_thread_id != uv_thread_self())
-    {
-        //printf("lock apply_gen by %ld current %ld \n", uv_thread_self(), apply_gen_thread_id);
-        uv_mutex_lock(&apply_gen_mutex);
-        locked = 1;
-        apply_gen_thread_id = uv_thread_self();
-    }
     jl_methtable_t *mt = jl_gf_mtable(F);
 #ifdef JL_GF_PROFILE
     mt->ncalls++;
