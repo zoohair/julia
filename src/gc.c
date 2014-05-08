@@ -384,7 +384,7 @@ static void *alloc_big(size_t sz)
         jl_throw(jl_memory_exception);
     size_t allocsz = (sz+offs+15) & -16;
     bigval_t *v = (bigval_t*)malloc_a16(allocsz);
-    allocd_bytes += allocsz;
+    { LOCK( allocd_bytes += allocsz ) }
     if (v == NULL)
     {
         jl_throw(jl_memory_exception);
@@ -394,8 +394,10 @@ static void *alloc_big(size_t sz)
 #endif
     v->sz = sz;
     v->flags = 0;
+    JL_LOCK(gc)
     v->next = big_objects;
     big_objects = v;
+    JL_UNLOCK(gc)
     return &v->_data[0];
 }
 
@@ -433,6 +435,7 @@ static mallocarray_t *mafreelist = NULL;
 
 void jl_gc_track_malloced_array(jl_array_t *a)
 {
+    JL_LOCK(gc)
     mallocarray_t *ma;
     if (mafreelist == NULL) {
         ma = (mallocarray_t*)malloc(sizeof(mallocarray_t));
@@ -444,6 +447,7 @@ void jl_gc_track_malloced_array(jl_array_t *a)
     ma->a = a;
     ma->next = mallocarrays;
     mallocarrays = ma;
+    JL_UNLOCK(gc)
 }
 
 static size_t array_nbytes(jl_array_t *a)

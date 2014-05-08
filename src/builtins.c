@@ -32,6 +32,8 @@
 extern "C" {
 #endif
 
+JL_DEFINE_MUTEX_EXT(codegen)
+
 // exceptions -----------------------------------------------------------------
 
 DLLEXPORT void jl_error(const char *str)
