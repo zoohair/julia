@@ -206,7 +206,6 @@ static jl_methlist_t **mtcache_hash_bp(jl_array_t **pa, jl_value_t *ty,
 static jl_function_t *jl_method_table_assoc_exact_by_type(jl_methtable_t *mt,
                                                           jl_tuple_t *types)
 {
-    jl_global_lock();
     jl_methlist_t *ml = (jl_methlist_t*)JL_NULL;
     if (jl_tuple_len(types) > 0) {
         jl_value_t *ty = jl_t0(types);
@@ -228,21 +227,18 @@ static jl_function_t *jl_method_table_assoc_exact_by_type(jl_methtable_t *mt,
     while (ml != JL_NULL) {
         if (cache_match_by_type(&jl_tupleref(types,0), jl_tuple_len(types),
                                 (jl_tuple_t*)ml->sig, ml->va)) {
-            jl_global_unlock();
             return ml->func;
         }
         ml = ml->next;
     }
-    jl_global_unlock();
     return jl_bottom_func;
 }
 
 
- jl_function_t *jl_method_table_assoc_exact(jl_methtable_t *mt,
+static jl_function_t *jl_method_table_assoc_exact(jl_methtable_t *mt,
                                                   jl_value_t **args, size_t n)
 {
     // NOTE: This function is a huge performance hot spot!!
-    jl_global_lock();
     jl_methlist_t *ml = (jl_methlist_t*)JL_NULL;
     if (n > 0) {
         jl_value_t *a0 = args[0];
@@ -257,7 +253,6 @@ static jl_function_t *jl_method_table_assoc_exact_by_type(jl_methtable_t *mt,
             if (ml != JL_NULL) {
                 if (ml->next==JL_NULL && n==1 && jl_tuple_len(ml->sig)==1)
                 {
-                     jl_global_unlock();
                     return ml->func;
                 }
                 if (n==2) {
@@ -268,14 +263,12 @@ static jl_function_t *jl_method_table_assoc_exact_by_type(jl_methtable_t *mt,
                         if (jl_tuple_len(mn->sig)==2 &&
                             jl_tupleref(mn->sig,1)==(jl_value_t*)jl_typeof(a1))
                         {
-                            jl_global_unlock();                  
                             return mn->func;
                         }
                         mn = mn->next;
                         if (mn!=JL_NULL && jl_tuple_len(mn->sig)==2 &&
                             jl_tupleref(mn->sig,1)==(jl_value_t*)jl_typeof(a1))
                         {
-                             jl_global_unlock();
                             return mn->func;
                         }
                     }
@@ -290,13 +283,11 @@ static jl_function_t *jl_method_table_assoc_exact_by_type(jl_methtable_t *mt,
         size_t lensig = jl_tuple_len(ml->sig);
         if (lensig == n || (ml->va && lensig <= n+1)) {
             if (cache_match(args, n, (jl_tuple_t*)ml->sig, ml->va, lensig)) {
-                 jl_global_unlock();
                 return ml->func;
             }
         }
         ml = ml->next;
     }
-     jl_global_unlock();
     return jl_bottom_func;
 }
 
