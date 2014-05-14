@@ -1,7 +1,7 @@
 module LinAlg
 
 importall Base
-import Base: USE_BLAS64, size, copy, copy_transpose!, power_by_squaring, print_matrix, transpose!
+import Base: USE_BLAS64, size, copy, copy_transpose!, power_by_squaring, print_matrix
 
 export 
 # Modules
@@ -110,6 +110,7 @@ export
     svdvals,
     trace,
     transpose,
+    ctranspose,
     tril,
     triu,
     tril!,
@@ -189,6 +190,7 @@ Valid choices are 'U' (upper) or 'L' (lower).""")))
 end
 
 include("linalg/exceptions.jl")
+include("linalg/transpose.jl")
 include("linalg/generic.jl")
 
 include("linalg/blas.jl")

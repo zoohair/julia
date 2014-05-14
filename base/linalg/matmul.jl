@@ -4,7 +4,7 @@ arithtype(T) = T
 arithtype(::Type{Bool}) = Int
 
 # multiply by diagonal matrix as vector
-function scale!(C::Matrix, A::Matrix, b::Vector)
+function scale!(C::AbstractMatrix, A::AbstractMatrix, b::AbstractVector)
     m, n = size(A)
     n==length(b) || throw(DimensionMismatch(""))
     for j = 1:n
@@ -16,7 +16,7 @@ function scale!(C::Matrix, A::Matrix, b::Vector)
     C
 end
 
-function scale!(C::Matrix, b::Vector, A::Matrix)
+function scale!(C::AbstractMatrix, b::AbstractVector, A::AbstractMatrix)
     m, n = size(A)
     m==length(b) || throw(DimensionMismatch(""))
     for j=1:n, i=1:m
@@ -24,12 +24,13 @@ function scale!(C::Matrix, b::Vector, A::Matrix)
     end
     C
 end
-scale(A::Matrix, b::Vector) = scale!(similar(A, promote_type(eltype(A),eltype(b))), A, b)
-scale(b::Vector, A::Matrix) = scale!(similar(b, promote_type(eltype(A),eltype(b)), size(A)), b, A)
+scale(A::AbstractMatrix, b::AbstractVector) = scale!(similar(A, promote_type(eltype(A),eltype(b))), A, b)
+scale(b::AbstractVector, A::AbstractMatrix) = scale!(similar(b, promote_type(eltype(A),eltype(b)), size(A)), b, A)
 
 # Dot products
 
-dot{T<:BlasReal}(x::Vector{T}, y::Vector{T}) = BLAS.dot(x, y)
+# dot{T<:BlasReal}(x::Vector{T}, y::Vector{T}) = BLAS.dot(x, y)
+*{T<:BlasReal,Conj}(x::VectorTranspose{T,Vector{T},Conj}, y::Vector{T}) = BLAS.dot(x.data, y)
 dot{T<:BlasComplex}(x::Vector{T}, y::Vector{T}) = BLAS.dotc(x, y)
 function dot{T<:BlasReal, TI<:Integer}(x::Vector{T}, rx::Union(UnitRange{TI},Range{TI}), y::Vector{T}, ry::Union(UnitRange{TI},Range{TI}))
     length(rx)==length(ry) || throw(DimensionMismatch(""))
@@ -71,7 +72,10 @@ function (*){T,S}(A::AbstractMatrix{T}, x::AbstractVector{S})
     TS = promote_type(arithtype(T),arithtype(S))
     A_mul_B!(similar(x,TS,size(A,1)),A,x)
 end
-(*)(A::AbstractVector, B::AbstractMatrix) = reshape(A,length(A),1)*B
+
+# (*)(A::AbstractVector, B::AbstractMatrix) = reshape(A,length(A),1)*B
+*(x::Covector, A::AbstractMatrix) = (A'x')'
+*(A::Adjoint, x::AbstractVector) = gemv!(similar(x), 'C', A.data, x)
 
 A_mul_B!{T<:BlasFloat}(y::StridedVector{T}, A::StridedMatrix{T}, x::StridedVector{T}) = gemv!(y, 'N', A, x)
 for elty in (Float32,Float64)
