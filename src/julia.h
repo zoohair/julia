@@ -1280,6 +1280,7 @@ DLLEXPORT void jl_global_unlock();
       uv_mutex_unlock(& m ## _mutex); \
   }
 
+#define N_GC_THREADS 16
 
 // I/O system -----------------------------------------------------------------
 
