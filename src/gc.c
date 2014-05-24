@@ -83,8 +83,8 @@ typedef struct _bigval_t {
 } bigval_t;
 
 // GC knobs and self-measurement variables
-static size_t allocd_bytes = 0;
-static int64_t total_allocd_bytes = 0;
+static volatile size_t allocd_bytes = 0;
+static volatile int64_t total_allocd_bytes = 0;
 static int64_t last_gc_total_bytes = 0;
 static size_t freed_bytes = 0;
 static uint64_t total_gc_time=0;
@@ -143,7 +143,7 @@ DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
 {
     if (allocd_bytes > collect_interval)
         jl_gc_collect();
-    LOCK(allocd_bytes += sz)
+    __sync_fetch_and_add(&allocd_bytes,sz);
     void *b = malloc(sz);
     if (b == NULL)
         jl_throw(jl_memory_exception);
@@ -162,9 +162,7 @@ DLLEXPORT void *jl_gc_counted_realloc(void *p, size_t sz)
 {
     if (allocd_bytes > collect_interval)
         jl_gc_collect();
-    JL_LOCK(gc)
-    allocd_bytes += ((sz+1)/2);  // NOTE: wild guess at growth amount
-    JL_UNLOCK(gc)
+    __sync_fetch_and_add(&allocd_bytes,((sz+1)/2)); // NOTE: wild guess at growth amount
     void *b = realloc(p, sz);
     if (b == NULL)
         jl_throw(jl_memory_exception);
@@ -177,7 +175,7 @@ DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size_t 
         jl_gc_collect();
     if (sz > old)
     {
-        LOCK(allocd_bytes += (sz-old))
+        __sync_fetch_and_add(&allocd_bytes,sz-old);
     }
     void *b = realloc(p, sz);
     if (b == NULL)
@@ -195,9 +193,7 @@ void *jl_gc_managed_malloc(size_t sz)
     {
         jl_throw(jl_memory_exception);
     }
-    JL_LOCK(gc)
-    allocd_bytes += sz;
-    JL_UNLOCK(gc)
+    __sync_fetch_and_add(&allocd_bytes,sz);    
     return b;
 }
 
@@ -228,9 +224,7 @@ void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz, int isaligned)
     {
         jl_throw(jl_memory_exception);
     }
-    JL_LOCK(gc)
-    allocd_bytes += sz;
-    JL_UNLOCK(gc)
+    __sync_fetch_and_add(&allocd_bytes,sz);    
     return b;
 }
 
@@ -383,7 +377,7 @@ static void *alloc_big(size_t sz)
         jl_throw(jl_memory_exception);
     size_t allocsz = (sz+offs+15) & -16;
     bigval_t *v = (bigval_t*)malloc_a16(allocsz);
-    { LOCK( allocd_bytes += allocsz ) }
+    __sync_fetch_and_add(&allocd_bytes,allocsz);  
     if (v == NULL)
     {
         jl_throw(jl_memory_exception);
@@ -527,7 +521,7 @@ static inline void *pool_alloc(pool_t *p)
 {
     if (allocd_bytes > collect_interval)
         jl_gc_collect();
-    allocd_bytes += p->osize; // TODO we actually do not want to lock here. Use TLS?
+    __sync_fetch_and_add(&allocd_bytes,p->osize);
     if (p->freelist == NULL) {
         add_page(p);
     }
