@@ -76,4 +76,13 @@
 
 // threading options ----------------------------------------------------------
 
+// # threads/cores
+#define TI_MAX_SOCKETS          1
+#define TI_MAX_CORES            10
+#define TI_MAX_THREADS_PER_CORE 1
+#define TI_MAX_THREADS          TI_MAX_SOCKETS*TI_MAX_CORES*TI_MAX_THREADS_PER_CORE
+
+// number of memory pools for lock free pool_alloc
+#define N_GC_THREADS 16
+
 #endif
