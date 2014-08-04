@@ -88,9 +88,11 @@ void jl_init_primitives(void);
 void jl_init_codegen(void);
 void jl_init_intrinsic_functions(void);
 void jl_init_tasks(void *stack, size_t ssize);
+void jl_init_root_task(void);
 void jl_init_serializer(void);
-void jl_init_threading();
-void jl_cleanup_threading();
+void jl_init_threading(void);
+void jl_start_threads(void);
+void jl_shutdown_threading(void);
 
 void jl_dump_bitcode(char *fname);
 void jl_dump_objfile(char *fname, int jit_model);

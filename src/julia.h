@@ -1016,7 +1016,6 @@ typedef struct _jl_gcframe_t {
 // jl_value_t *x=NULL, *y=NULL; JL_GC_PUSH(&x, &y);
 // x = f(); y = g(); foo(x, y)
 
-extern DLLEXPORT uint64_t jl_main_thread_id;
 extern DLLEXPORT __JL_THREAD jl_gcframe_t *jl_pgcstack;
 
 #define JL_GC_PUSH(...)                                                   \
@@ -1156,9 +1155,17 @@ typedef struct _jl_task_t {
     jl_module_t *current_module;
 } jl_task_t;
 
-extern DLLEXPORT jl_task_t * volatile jl_current_task;
-extern DLLEXPORT jl_task_t *jl_root_task;
-extern DLLEXPORT jl_value_t *jl_exception_in_transit;
+typedef struct {
+    jl_task_t **pcurrent_task;
+    jl_task_t **proot_task;
+    jl_value_t **pexception_in_transit;
+    jl_value_t **ptask_arg_in_transit;
+} jl_thread_task_state_t;
+
+extern DLLEXPORT __JL_THREAD jl_task_t *jl_current_task;
+extern DLLEXPORT __JL_THREAD jl_task_t *jl_root_task;
+extern DLLEXPORT __JL_THREAD jl_value_t *jl_exception_in_transit;
+extern DLLEXPORT __JL_THREAD jl_value_t *jl_task_arg_in_transit;
 
 jl_task_t *jl_new_task(jl_function_t *start, size_t ssize);
 jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg);
@@ -1308,9 +1315,6 @@ DLLEXPORT void jl_threading_profile();
             JL_ATOMIC_COMPARE_AND_SWAP(m ## _mutex, uv_thread_self(), 0); \
     }
 #endif
-
-extern __JL_THREAD jl_jmp_buf jl_thread_eh;
-extern __JL_THREAD jl_value_t *jl_thread_exception_in_transit;
 
 // I/O system -----------------------------------------------------------------
 

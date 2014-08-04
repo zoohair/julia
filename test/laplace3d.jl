@@ -5,8 +5,8 @@ const sixth = 1.0/6.0
 const error_tol = 0.00001
 
 function stencil3d(u::Array{Float32,3}, k_1::Int64, k_2::Int64, k_3::Int64)
-    return u[k_1-1, k_2,   k_3  ] + u[k_1+1, k_2,   k_3] +
-           u[k_1,   k_2-1, k_3  ] + u[k_1,   k_2+1, k_3] +
+    return (u[k_1-1, k_2,   k_3  ] + u[k_1+1, k_2,   k_3]) +
+           (u[k_1,   k_2-1, k_3  ] + u[k_1,   k_2+1, k_3]) +
            u[k_1,   k_2,   k_3-1] + u[k_1,   k_2,   k_3+1] * sixth
 end
 
@@ -51,9 +51,9 @@ function laplace3d_imp1(u1::Array{Float32,3}, u3::Array{Float32,3},
     end
 end
 
-function fun(u1, u3, nx, ny, nz)
+function fun(u1, u3, nx, ny, nz, nt)
     tid = threadid()
-    tnz, rem = divrem(nz, nthreads())
+    tnz, rem = divrem(nz, nt)
     z_start = 1 + ((tid-1) * tnz)
     z_end = z_start + tnz - 1
     if tid <= rem
@@ -79,11 +79,11 @@ function fun(u1, u3, nx, ny, nz)
     end
 end
 
-precompile(fun, (Array{Float32,3}, Array{Float32,3}, Int64, Int64, Int64))
+precompile(fun, (Array{Float32,3}, Array{Float32,3}, Int64, Int64, Int64, Int))
 
 function laplace3d_par(u1::Array{Float32,3}, u3::Array{Float32,3},
                        nx::Int64, ny::Int64, nz::Int64)
-    ccall(:jl_threading_run, Void, (Any, Any), fun, (u1, u3, nx, ny, nz))
+    ccall(:jl_threading_run, Void, (Any, Any), fun, (u1, u3, nx, ny, nz, nthreads()))
     return
 
     @parblock begin

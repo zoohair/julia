@@ -4048,6 +4048,13 @@ static void init_julia_llvm_env(Module *m)
     add_named_global(jlpgcstack_var, (void*)&jl_pgcstack);
 #endif
 
+    jlexc_var =
+        new GlobalVariable(*m, jl_pvalue_llvmt,
+                           false, GlobalVariable::ExternalLinkage,
+                           NULL, "jl_exception_in_transit", NULL,
+                           GlobalValue::GeneralDynamicTLSModel);
+    add_named_global(jlexc_var, (void*)&jl_exception_in_transit);
+
     global_to_llvm("__stack_chk_guard", (void*)&__stack_chk_guard, m);
     Function *jl__stack_chk_fail =
         Function::Create(FunctionType::get(T_void, false),
@@ -4059,8 +4066,6 @@ static void init_julia_llvm_env(Module *m)
     jltrue_var = global_to_llvm("jl_true", (void*)&jl_true, m);
     jlfalse_var = global_to_llvm("jl_false", (void*)&jl_false, m);
     jlnull_var = global_to_llvm("jl_null", (void*)&jl_null, m);
-    jlexc_var = global_to_llvm("jl_exception_in_transit",
-                               (void*)&jl_exception_in_transit, m);
     jldiverr_var = global_to_llvm("jl_diverror_exception",
                                   (void*)&jl_diverror_exception, m);
     jlundeferr_var = global_to_llvm("jl_undefref_exception",

@@ -26,6 +26,7 @@
 
 #include "julia.h"
 #include "julia_internal.h"
+#include "threading.h"
 #include <stdio.h>
 
 #ifdef __cplusplus
@@ -784,7 +785,11 @@ void julia_init(char *imageFile)
     jl_init_frontend();
     jl_init_types();
     jl_init_tasks(jl_stack_lo, jl_stack_hi-jl_stack_lo);
+    jl_init_root_task();
     jl_init_codegen();
+
+    jl_start_threads();
+
     jl_an_empty_cell = (jl_value_t*)jl_alloc_cell_1d(0);
 
     jl_init_serializer();
@@ -844,8 +849,10 @@ void julia_init(char *imageFile)
     // eval() uses Main by default, so Main.eval === Core.eval
     jl_module_import(jl_main_module, jl_core_module, jl_symbol("eval"));
     jl_current_module = jl_main_module;
-    jl_root_task->current_module = jl_current_module;
-
+    int t;
+    for(t=0; t < jl_n_threads; t++) {
+        (*jl_all_task_states[t].proot_task)->current_module = jl_current_module;
+    }
 
 #ifndef _OS_WINDOWS_
     signal_stack = malloc(sig_stack_size);
@@ -1042,12 +1049,15 @@ static jl_value_t *basemod(char *name)
 // fetch references to things defined in boot.jl
 void jl_get_builtin_hooks(void)
 {
+    int t;
     jl_nothing = core("nothing");
-    jl_root_task->tls = jl_nothing;
-    jl_root_task->consumers = jl_nothing;
-    jl_root_task->donenotify = jl_nothing;
-    jl_root_task->exception = jl_nothing;
-    jl_root_task->result = jl_nothing;
+    for(t=0; t < jl_n_threads; t++) {
+        (*jl_all_task_states[t].proot_task)->tls = jl_nothing;
+        (*jl_all_task_states[t].proot_task)->consumers = jl_nothing;
+        (*jl_all_task_states[t].proot_task)->donenotify = jl_nothing;
+        (*jl_all_task_states[t].proot_task)->exception = jl_nothing;
+        (*jl_all_task_states[t].proot_task)->result = jl_nothing;
+    }
 
     jl_char_type    = (jl_datatype_t*)core("Char");
     jl_int8_type    = (jl_datatype_t*)core("Int8");

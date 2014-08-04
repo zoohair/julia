@@ -30,7 +30,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <stdint.h>
 #include "julia.h"
-
+#include "threadgroup.h"
 
 #define PROFILE_JL_THREADING            1
 
@@ -42,6 +42,7 @@ extern __thread int16_t ti_tid;
 extern __JL_THREAD struct _jl_thread_heap_t *jl_thread_heap;
 extern struct _jl_thread_heap_t **jl_all_heaps;
 extern jl_gcframe_t ***jl_all_pgcstacks;
+extern jl_thread_task_state_t *jl_all_task_states;
 
 extern DLLEXPORT int jl_n_threads;  // # threads we're actually using
 

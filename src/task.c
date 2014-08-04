@@ -12,6 +12,7 @@
 #include <errno.h>
 #include "julia.h"
 #include "julia_internal.h"
+#include "threading.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -134,29 +135,24 @@ static void _probe_arch(void)
 
 /* end probing code */
 
-/*
-  TODO:
-  - per-task storage (scheme-like parameters)
-  - stack growth
-*/
-
 static jl_sym_t *done_sym;
 static jl_sym_t *failed_sym;
 static jl_sym_t *runnable_sym;
 
 extern size_t jl_page_size;
 jl_datatype_t *jl_task_type;
-DLLEXPORT jl_task_t * volatile jl_current_task;
-jl_task_t *jl_root_task;
-jl_value_t * volatile jl_task_arg_in_transit;
-jl_value_t *jl_exception_in_transit;
+
 #ifdef JL_GC_MARKSWEEP
 __JL_THREAD jl_gcframe_t *jl_pgcstack = NULL;
 #endif
+DLLEXPORT __JL_THREAD jl_task_t *jl_current_task;
+DLLEXPORT __JL_THREAD jl_task_t *jl_root_task;
+DLLEXPORT __JL_THREAD jl_value_t *jl_exception_in_transit;
+DLLEXPORT __JL_THREAD jl_value_t *jl_task_arg_in_transit;
 
 static void start_task(jl_task_t *t);
 #ifdef COPY_STACKS
-jl_jmp_buf * volatile jl_jmp_target;
+__JL_THREAD jl_jmp_buf * volatile jl_jmp_target;
 
 static void save_stack(jl_task_t *t)
 {
@@ -272,9 +268,6 @@ static void ctx_switch(jl_task_t *t, jl_jmp_buf *where)
 extern int jl_in_gc;
 static jl_value_t *switchto(jl_task_t *t)
 {
-    // prevent threads to switch tasks
-    if (jl_main_thread_id != uv_thread_self())
-        return jl_nothing;
     if (t->state == done_sym || t->state == failed_sym) {
         jl_task_arg_in_transit = (jl_value_t*)jl_null;
         if (t->exception != jl_nothing)
@@ -396,12 +389,19 @@ static void finish_task(jl_task_t *t, jl_value_t *resultval)
 #ifdef COPY_STACKS
     t->stkbuf = NULL;
 #endif
-    if (task_done_hook_func == NULL) {
-        task_done_hook_func = (jl_function_t*)jl_get_global(jl_base_module,
-                                                            jl_symbol("task_done_hook"));
+    if (ti_tid == 0) {
+        // for now only thread 0 runs the task scheduler
+        if (task_done_hook_func == NULL) {
+            task_done_hook_func = (jl_function_t*)jl_get_global(jl_base_module,
+                                                                jl_symbol("task_done_hook"));
+        }
+        if (task_done_hook_func != NULL) {
+            jl_apply(task_done_hook_func, (jl_value_t**)&t, 1);
+        }
     }
-    if (task_done_hook_func != NULL) {
-        jl_apply(task_done_hook_func, (jl_value_t**)&t, 1);
+    else {
+        // others return to thread loop
+        jl_switchto(jl_root_task, jl_nothing);
     }
     assert(0);
 }
@@ -425,7 +425,10 @@ static void start_task(jl_task_t *t)
         switch_stack(jl_current_task, jl_jmp_target);
     }
 #endif
-    res = jl_apply(t->start, NULL, 0);
+    if (jl_is_tuple(arg) && jl_tuple_len(arg)>0)
+        res = jl_apply(t->start, &jl_tupleref(arg,0), jl_tuple_len(arg));
+    else
+        res = jl_apply(t->start, NULL, 0);
     JL_GC_POP();
     finish_task(t, res);
     assert(0);
@@ -717,14 +720,6 @@ DLLEXPORT void gdbbacktrace()
 void NORETURN throw_internal(jl_value_t *e)
 {
     assert(e != NULL);
-    
-    // Threads use a special exit here to tell the main thread that
-    // an exception occurred. This means that try/catch should not be
-    // used in threads currently.
-    if (jl_main_thread_id != uv_thread_self()) {
-        jl_thread_exception_in_transit = e;
-        jl_longjmp(jl_thread_eh,1);
-    }
 
     jl_exception_in_transit = e;
     if (jl_current_task->eh != NULL) {
@@ -748,13 +743,6 @@ void NORETURN throw_internal(jl_value_t *e)
 DLLEXPORT void jl_throw(jl_value_t *e)
 {
     assert(e != NULL);
-    // Threads use a special exit here to tell the main thread that
-    // an exception occurred. This means that try/catch should not be
-    // used in threads currently.
-    if (jl_main_thread_id != uv_thread_self()) {
-        jl_thread_exception_in_transit = e;
-        jl_longjmp(jl_thread_eh,1);
-    } 
     record_backtrace();
     throw_internal(e);
 }
@@ -877,6 +865,9 @@ jl_function_t *jl_unprotect_stack_func;
 
 void jl_init_tasks(void *stack, size_t ssize)
 {
+    (void)stack;  // TODO make per-thread
+    (void)ssize;
+
     _probe_arch();
     jl_task_type = jl_new_datatype(jl_symbol("Task"),
                                    jl_any_type,
@@ -904,6 +895,11 @@ void jl_init_tasks(void *stack, size_t ssize)
     failed_sym = jl_symbol("failed");
     runnable_sym = jl_symbol("runnable");
 
+    jl_unprotect_stack_func = jl_new_closure(jl_unprotect_stack, (jl_value_t*)jl_null, NULL);
+}
+
+void jl_init_root_task(void)
+{
     jl_current_task = (jl_task_t*)allocobj(sizeof(jl_task_t));
     jl_current_task->type = (jl_value_t*)jl_task_type;
 #ifdef COPY_STACKS
@@ -911,6 +907,7 @@ void jl_init_tasks(void *stack, size_t ssize)
     jl_current_task->ssize = 0;  // size of saved piece
     jl_current_task->bufsz = 0;
 #else
+    // TODO update for threads
     jl_current_task->stack = stack;
     jl_current_task->ssize = ssize;
 #endif
@@ -934,7 +931,6 @@ void jl_init_tasks(void *stack, size_t ssize)
 
     jl_exception_in_transit = (jl_value_t*)jl_null;
     jl_task_arg_in_transit = (jl_value_t*)jl_null;
-    jl_unprotect_stack_func = jl_new_closure(jl_unprotect_stack, (jl_value_t*)jl_null, NULL);
 }
 
 #ifdef __cplusplus

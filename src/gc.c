@@ -20,7 +20,6 @@
 #endif
 #include "julia.h"
 #include "julia_internal.h"
-#include "threadgroup.h"
 #include "threading.h"
 
 #ifdef _P64
@@ -841,7 +840,6 @@ static void visit_mark_stack()
 
 void jl_mark_box_caches(void);
 
-extern jl_value_t * volatile jl_task_arg_in_transit;
 #if defined(GCTIME) || defined(GC_FINAL_STATS)
 double clock_now(void);
 #endif
@@ -852,11 +850,16 @@ extern jl_array_t *jl_module_init_order;
 
 static void gc_mark(void)
 {
+    int t;
     // mark all roots
 
     // active tasks
-    gc_push_root(jl_root_task, 0);
-    gc_push_root(jl_current_task, 0);
+    for(t=0; t < jl_n_threads; t++) {
+        gc_push_root(*jl_all_task_states[t].proot_task, 0);
+        gc_push_root(*jl_all_task_states[t].pcurrent_task, 0);
+        gc_push_root(*jl_all_task_states[t].pexception_in_transit, 0);
+        gc_push_root(*jl_all_task_states[t].ptask_arg_in_transit, 0);
+    }
 
     // modules
     gc_push_root(jl_main_module, 0);
@@ -866,8 +869,6 @@ static void gc_mark(void)
 
     // invisible builtin values
     if (jl_an_empty_cell) gc_push_root(jl_an_empty_cell, 0);
-    gc_push_root(jl_exception_in_transit, 0);
-    gc_push_root(jl_task_arg_in_transit, 0);
     gc_push_root(jl_unprotect_stack_func, 0);
     gc_push_root(jl_bottom_func, 0);
     gc_push_root(jl_typetype_type, 0);
@@ -886,7 +887,6 @@ static void gc_mark(void)
     size_t i;
 
     // stuff randomly preserved
-    int t;
     for(t=0; t < jl_n_threads; t++) {
         arraylist_t *pv = &jl_all_heaps[t]->preserved_values;
         for(i=0; i < pv->len; i++) {
