@@ -1,13 +1,13 @@
 using Base.Cartesian
 using Base.Threading
 
-const sixth = 1.0/6.0
+const sixth = 1.0f0/6.0f0
 const error_tol = 0.00001
 
 function stencil3d(u::Array{Float32,3}, k_1::Int64, k_2::Int64, k_3::Int64)
-    return (u[k_1-1, k_2,   k_3  ] + u[k_1+1, k_2,   k_3]) +
-           (u[k_1,   k_2-1, k_3  ] + u[k_1,   k_2+1, k_3]) +
-           u[k_1,   k_2,   k_3-1] + u[k_1,   k_2,   k_3+1] * sixth
+    return (u[k_1-1, k_2,   k_3  ] + u[k_1+1, k_2,   k_3] +
+            u[k_1,   k_2-1, k_3  ] + u[k_1,   k_2+1, k_3] +
+            u[k_1,   k_2,   k_3-1] + u[k_1,   k_2,   k_3+1]) * sixth
 end
 
 function laplace3d_orig(u1::Array{Float32,3}, u3::Array{Float32,3},
@@ -125,14 +125,12 @@ function laplace3d(nx=258, ny=258, nz=258; iters=50, verify=false)
             (@nref 3 u1 k) = 0.0
         end
     end
-    tic()
-    for n in 1:iters
+    @time for n in 1:iters
         laplace3d_par(u1, u3, nx, ny, nz)
         foo = u1
         u1 = u3
         u3 = foo
     end
-    toc()
     #ccall(:jl_threading_profile, None, ())
     if verify
         u1_orig = Array(Float32, nx, ny, nz)
@@ -144,14 +142,12 @@ function laplace3d(nx=258, ny=258, nz=258; iters=50, verify=false)
                 (@nref 3 u1_orig k) = 0.0
             end
         end
-        tic()
-        for n in 1:iters
+        @time for n in 1:iters
             laplace3d_orig(u1_orig, u3_orig, nx, ny, nz)
             foo = u1_orig
             u1_orig = u3_orig
             u3_orig = foo
         end
-        toc()
         @nloops 3 k u1 begin
             if abs((@nref 3 u1 k) - (@nref 3 u1_orig k)) > error_tol
                 error(@sprintf("Verify error: %f - %f [%d, %d, %d]\n",
@@ -161,6 +157,8 @@ function laplace3d(nx=258, ny=258, nz=258; iters=50, verify=false)
         println("verification succeeded")
     end
 end
+
+gc()
 
 laplace3d(iters=50, verify=true)
 
