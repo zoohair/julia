@@ -53,21 +53,13 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 /* TODO:
   . ugly mixture of uv_thread* and pthread*; fix with patch to libuv?
   . fix interface to properly support thread groups
-  . add queue per thread for tasks; then remove jl_main_thread_id and
-    let threads handle their own exceptions
+  . add queue per thread for tasks
   . add reduction; reduce values returned from thread function
   . make code generation thread-safe and remove the lock
 */
 
-// to prevent task switching in threads
-uint64_t jl_main_thread_id = 0;
-
 // lock for code generation
 JL_DEFINE_MUTEX(codegen);
-
-// exceptions that happen in threads are caught and thrown in the main thread
-__JL_THREAD jl_jmp_buf jl_thread_eh;
-__JL_THREAD jl_value_t* jl_thread_exception_in_transit;
 
 // thread ID
 __JL_THREAD int16_t ti_tid = 0;
@@ -76,6 +68,7 @@ __JL_THREAD int16_t ti_tid = 0;
 __JL_THREAD struct _jl_thread_heap_t *jl_thread_heap;
 struct _jl_thread_heap_t **jl_all_heaps;
 jl_gcframe_t ***jl_all_pgcstacks;
+jl_thread_task_state_t *jl_all_task_states;
 
 // only one thread group for now
 ti_threadgroup_t *tgworld;
@@ -132,22 +125,26 @@ void ti_initthread(int16_t tid)
     ti_tid = tid;
     jl_pgcstack = NULL;
     jl_all_pgcstacks[tid] = &jl_pgcstack;
-    jl_all_heaps[tid] = jl_mk_thread_heap();
-    jl_thread_heap = jl_all_heaps[tid];
+    jl_thread_heap = jl_mk_thread_heap();
+    jl_all_heaps[tid] = jl_thread_heap;
+
+    jl_all_task_states[tid].pcurrent_task = &jl_current_task;
+    jl_all_task_states[tid].proot_task = &jl_root_task;
+    jl_all_task_states[tid].pexception_in_transit = &jl_exception_in_transit;
+    jl_all_task_states[tid].ptask_arg_in_transit = &jl_task_arg_in_transit;
 }
 
 
 // all threads call this function to run user code
 jl_value_t *ti_run_fun(jl_function_t *f, jl_tuple_t *args, size_t nargs)
 {
-    // try/catch
-    if (!jl_setjmp(jl_thread_eh, 0)) {
+    JL_TRY {
         jl_apply(f, &jl_tupleref(args,0), jl_tuple_len(args));
-        return jl_nothing;
     }
-    else {
-        return jl_thread_exception_in_transit;
+    JL_CATCH {
+        return jl_exception_in_transit;
     }
+    return jl_nothing;
 }
 
 
@@ -160,6 +157,9 @@ void *ti_threadfun(void *arg)
 
     // initialize this thread (set tid, create heap, etc.)
     ti_initthread(ta->tid);
+    jl_init_root_task();
+
+    JL_SET_STACK_BASE;
 
     // set the thread-local tid and wait for a thread group
     while (ta->state == TI_THREAD_INIT)
@@ -219,15 +219,9 @@ void ti_reset_timings();
 #endif
 
 // interface to Julia; sets up to make the runtime thread-safe
-void jl_init_threading()
+void jl_init_threading(void)
 {
     char *cp;
-    int i, exclusive;
-    uint64_t ptid;
-    ti_threadarg_t **targs;
-
-    // TODO: used in task.c; remove when that's cleaned up
-    jl_main_thread_id = uv_thread_self();
 
     // how many threads available, usable
     jl_max_threads = jl_cpu_cores();
@@ -242,6 +236,7 @@ void jl_init_threading()
     // set up space for per-thread heaps
     jl_all_heaps = malloc(jl_n_threads * sizeof(void*));
     jl_all_pgcstacks = malloc(jl_n_threads * sizeof(void*));
+    jl_all_task_states = malloc(jl_n_threads * sizeof(jl_thread_task_state_t));
 
 #if PROFILE_JL_THREADING
     // estimate CPU speed
@@ -258,6 +253,14 @@ void jl_init_threading()
 
     // initialize this master thread (set tid, create heap, etc.)
     ti_initthread(0);
+}
+
+void jl_start_threads(void)
+{
+    char *cp;
+    int i, exclusive;
+    uint64_t ptid;
+    ti_threadarg_t **targs;
 
     // do we have exclusive use of the machine? default is no
     exclusive = DEFAULT_MACHINE_EXCLUSIVE;
@@ -299,7 +302,7 @@ void jl_init_threading()
 
 
 // TODO: is this needed? where/when/how to call it?
-void jl_shutdown_threading()
+void jl_shutdown_threading(void)
 {
     // stop the spinning threads by sending them a command
     ti_threadwork_t *work = &threadwork;
