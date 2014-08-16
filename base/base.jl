@@ -15,8 +15,9 @@ convert(T, x) = convert_default(T, x, convert)
 convert(::(), ::()) = ()
 convert(::Type{Tuple}, x::Tuple) = x
 
-# allow convert to be called as if it were a single-argument constructor
-call{T}(::Type{T}, x) = convert(T, x)
+# general definition for call (order is important for these two definitions)
+call(f::Callable, args...; kws...) = f(args...; kws...)
+call(f::Callable, args...) = f(args...)
 
 argtail(x, rest...) = rest
 tupletail(x::Tuple) = argtail(x...)
