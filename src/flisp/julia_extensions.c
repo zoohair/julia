@@ -71,7 +71,6 @@ static int is_wc_cat_id_start(uint32_t wc, utf8proc_propval_t cat)
                 wc >= 0x222b)) || // ∫, ∬, ∭, ∮, ∯, ∰, ∱, ∲, ∳
 
               (wc >= 0x22c0 && wc <= 0x22c3) ||  // N-ary big ops: ⋀, ⋁, ⋂, ⋃
-              (wc >= 0x25F8 && wc <= 0x25ff) ||  // ◸, ◹, ◺, ◻, ◼, ◽, ◾, ◿
 
               (wc >= 0x266f &&
                (wc == 0x266f || wc == 0x27d8 || wc == 0x27d9 || // ♯, ⟘, ⟙
@@ -95,6 +94,9 @@ static int is_wc_cat_id_start(uint32_t wc, utf8proc_propval_t cat)
             // angle symbols
             (wc >= 0x2220 && wc <= 0x2222) || // ∠, ∡, ∢
             (wc >= 0x299b && wc <= 0x29af) || // ⦛, ⦜, ⦝, ⦞, ⦟, ⦠, ⦡, ⦢, ⦣, ⦤, ⦥, ⦦, ⦧, ⦨, ⦩, ⦪, ⦫, ⦬, ⦭, ⦮, ⦯
+
+	    // geometric shapes
+	    (wc >= 0x25a0 && wc <= 0x25ff) ||
 
             // Other_ID_Start
             wc == 0x2118 || wc == 0x212E || // ℘, ℮
