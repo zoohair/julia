@@ -79,7 +79,6 @@ static int is_wc_cat_id_start(uint32_t wc, utf8proc_propval_t cat)
                 (wc >= 0x2a00 && wc <= 0x2a06) ||  // ⨀, ⨁, ⨂, ⨃, ⨄, ⨅, ⨆
                 (wc >= 0x2a09 && wc <= 0x2a16) ||  // ⨉, ⨊, ⨋, ⨌, ⨍, ⨎, ⨏, ⨐, ⨑, ⨒, ⨓, ⨔, ⨕, ⨖
                 wc == 0x2a1b || wc == 0x2a1c)))) || // ⨛, ⨜
-		wc == 0x2a1d || (wc >= 0x27d5 && wc <= 0x27d7) || //joins: ⨝ ⟕ ⟖ ⟗
 
             (wc >= 0x1d6c1 && // variants of \nabla and \partial
              (wc == 0x1d6c1 || wc == 0x1d6db ||
