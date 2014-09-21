@@ -58,7 +58,7 @@ const latex_symbols = [
 # manual additions:
 
     "\\cbrt" => "\u221B",
-    "\\female" => "♀",
+    "\\venus" => "♀",
     "\\mars" => "♂",
     "\\pprime" => "″",
     "\\ppprime" => "‴",
