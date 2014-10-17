@@ -613,8 +613,6 @@ static void sweep_pool(pool_t *p)
 
 // sweep phase
 
-extern void jl_unmark_symbols(void);
-
 static void gc_sweep(void)
 {
     sweep_malloced_arrays();
@@ -624,7 +622,6 @@ static void gc_sweep(void)
         sweep_pool(&norm_pools[i]);
         sweep_pool(&ephe_pools[i]);
     }
-    jl_unmark_symbols();
 }
 
 // mark phase
@@ -731,6 +728,7 @@ static void push_root(jl_value_t *v, int d)
 {
     assert(v != NULL);
     jl_value_t *vt = (jl_value_t*)gc_typeof(v);
+    if (vt == (jl_value_t*)jl_symbol_type) return;
 
 #ifdef OBJPROFILE
     if (!gc_marked(v)) {
@@ -959,7 +957,7 @@ void jl_gc_collect(void)
         uint64_t t0 = jl_hrtime();
         gc_mark();
 #ifdef GCTIME
-        JL_PRINTF(JL_STDERR, "mark time %.3f ms\n", (jl_hrtime()-t0)*1.0e6);
+        JL_PRINTF(JL_STDERR, "mark time  %.3f ms\n", (jl_hrtime()-t0)*1.0e-9);
 #endif
 #if defined(MEMPROFILE)
         all_pool_stats();
@@ -971,7 +969,7 @@ void jl_gc_collect(void)
         sweep_weak_refs();
         gc_sweep();
 #ifdef GCTIME
-        JL_PRINTF(JL_STDERR, "sweep time %.3f ms\n", (jl_hrtime()-t1)*1.0e6);
+        JL_PRINTF(JL_STDERR, "sweep time %.3f ms\n", (jl_hrtime()-t1)*1.0e-9);
 #endif
         int nfinal = to_finalize.len;
         run_finalizers();

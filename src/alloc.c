@@ -486,17 +486,6 @@ static jl_sym_t *mk_symbol(const char *str)
     return sym;
 }
 
-static void unmark_symbols_(jl_sym_t *root)
-{
-    while (root != NULL) {
-        root->type = (jl_value_t*)(((uptrint_t)root->type)&~1UL);
-        unmark_symbols_(root->left);
-        root = root->right;
-    }
-}
-
-void jl_unmark_symbols(void) { unmark_symbols_(symtab); }
-
 static jl_sym_t **symtab_lookup(jl_sym_t **ptree, const char *str)
 {
     int x;
