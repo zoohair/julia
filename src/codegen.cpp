@@ -673,8 +673,6 @@ extern "C" void jl_generate_fptr(jl_function_t *f)
 
         Function *llvmf = (Function*)li->functionObject;
 
-        uv_mutex_lock(&genfptr_mutex);
-
 #ifdef USE_MCJIT
         li->fptr = (jl_fptr_t)jl_ExecutionEngine->getFunctionAddress(llvmf->getName());
 #else
