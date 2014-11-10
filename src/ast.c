@@ -116,7 +116,6 @@ static builtinspec_t julia_flisp_ast_ext[] = {
 
 DLLEXPORT void jl_init_frontend(void)
 {
-    uv_mutex_init(&ast_mutex);
     fl_init(4*1024*1024);
     value_t img = cvalue(iostreamtype, sizeof(ios_t));
     ios_t *pi = value2c(ios_t*, img);
