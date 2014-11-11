@@ -74,7 +74,6 @@ typedef struct {
     uint8_t             command;
     jl_function_t       *fun;
     jl_tuple_t          *args;
-    int                 numargs;
     jl_value_t          *ret;
 
 } ti_threadwork_t;

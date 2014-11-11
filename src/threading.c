@@ -92,15 +92,18 @@ uint64_t *join_ticks;
 int ti_threadcreate(uint64_t *pthread_id, int proc_num,
                     void *(*thread_fun)(void *), void *thread_arg)
 {
-    cpu_set_t cset;
     pthread_attr_t attr;
-
     pthread_attr_init(&attr);
+
+#ifdef _OS_LINUX
+    cpu_set_t cset;
     if (proc_num >= 0) {
 	CPU_ZERO(&cset);
 	CPU_SET(proc_num, &cset);
 	pthread_attr_setaffinity_np(&attr, sizeof(cpu_set_t), &cset);
     }
+#endif
+
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
     return pthread_create(pthread_id, &attr, thread_fun, thread_arg);
 }
@@ -109,11 +112,13 @@ int ti_threadcreate(uint64_t *pthread_id, int proc_num,
 // set thread affinity
 void ti_threadsetaffinity(uint64_t pthread_id, int proc_num)
 {
+#ifdef _OS_LINUX
     cpu_set_t cset;
 
     CPU_ZERO(&cset);
     CPU_SET(proc_num, &cset);
     pthread_setaffinity_np(pthread_id, sizeof(cpu_set_t), &cset);
+#endif
 }
 
 
@@ -136,7 +141,7 @@ void ti_initthread(int16_t tid)
 
 
 // all threads call this function to run user code
-jl_value_t *ti_run_fun(jl_function_t *f, jl_tuple_t *args, size_t nargs)
+jl_value_t *ti_run_fun(jl_function_t *f, jl_tuple_t *args)
 {
     JL_TRY {
         jl_apply(f, &jl_tupleref(args,0), jl_tuple_len(args));
@@ -191,7 +196,7 @@ void *ti_threadfun(void *arg)
                 break;
             else if (work->command == TI_THREADWORK_RUN)
                 // TODO: return value? reduction?
-                ti_run_fun(work->fun, work->args, work->numargs);
+                ti_run_fun(work->fun, work->args);
         }
 
 #if PROFILE_JL_THREADING
@@ -355,11 +360,10 @@ jl_value_t *jl_threading_run(jl_function_t *f, jl_tuple_t *args)
     uint64_t tstart = rdtsc();
 #endif
 
-    size_t nargs = jl_tuple_len(args);
     jl_tuple_t *argtypes = NULL;
     jl_function_t *fun = NULL;
     JL_GC_PUSH2(&argtypes, &fun);
-    argtypes = arg_type_tuple(&jl_tupleref(args, 0), nargs);
+    argtypes = arg_type_tuple(&jl_tupleref(args, 0), jl_tuple_len(args));
     fun = jl_get_specialization(f, argtypes);
     if (fun == NULL)
         fun = f;
@@ -369,7 +373,6 @@ jl_value_t *jl_threading_run(jl_function_t *f, jl_tuple_t *args)
     threadwork.command = TI_THREADWORK_RUN;
     threadwork.fun = fun;
     threadwork.args = args;
-    threadwork.numargs = nargs;
     threadwork.ret = jl_nothing;
 
 #if PROFILE_JL_THREADING
@@ -387,7 +390,7 @@ jl_value_t *jl_threading_run(jl_function_t *f, jl_tuple_t *args)
 #endif
 
     // this thread must do work too (TODO: reduction?)
-    tw->ret = ti_run_fun(fun, args, nargs);
+    tw->ret = ti_run_fun(fun, args);
 
 #if PROFILE_JL_THREADING
     uint64_t trun = rdtsc();
