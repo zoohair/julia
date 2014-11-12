@@ -43,7 +43,18 @@ function l3d_threadfun(u1, u3, nx, ny, nz)
     end
 end
 
+function l3d_threadfor(u1, u3, nx, ny, nz)
+    @threads all for k_3=2:nz-1
+        for k_2 = 2:ny-1
+            @simd for k_1 = 2:nx-1
+                @inbounds u3[k_1, k_2, k_3] = stencil3d(u1, k_1, k_2, k_3)
+            end
+        end
+    end
+end
+
 precompile(l3d_threadfun, (Array{Float32,3}, Array{Float32,3}, Int64, Int64, Int64))
+precompile(l3d_threadfor, (Array{Float32,3}, Array{Float32,3}, Int64, Int64, Int64))
 
 function laplace3d(nx=258, ny=258, nz=258; iters=100, verify=false)
     u1 = Array(Float32, nx, ny, nz)
@@ -57,7 +68,8 @@ function laplace3d(nx=258, ny=258, nz=258; iters=100, verify=false)
     end
     @time for n in 1:iters
         # @threads all l3d_threadfun(u1, u3, nx, ny, nz)
-        ccall(:jl_threading_run, Void, (Any, Any), l3d_threadfun, (u1, u3, nx, ny, nz))
+        l3d_threadfor(u1, u3, nx, ny, nz)
+        #ccall(:jl_threading_run, Void, (Any, Any), l3d_threadfun, (u1, u3, nx, ny, nz))
         foo = u1
         u1 = u3
         u3 = foo

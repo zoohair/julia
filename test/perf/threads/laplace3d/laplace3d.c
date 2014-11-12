@@ -32,6 +32,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
    auto:        some ninja knowledge, using icc directives
    sse/avx:     ninja-optimized
 
+   Requires Sandy Bridge and up.
+
    Note that the SSE/AVX versions do not handle boundary conditions
    and thus each dimension must be 4n+2/8n+2. Try 258x258x258.
 
@@ -44,9 +46,10 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <unistd.h>
 #include <immintrin.h>
 #include <omp.h>
-
+#include "../../../../src/ia_misc.h"
 
 void l3d_naive(int nx, int padded_nx, int ny, int nz, float *u1, float *u2);
 void l3d_auto(int nx, int padded_nx, int ny, int nz, float *u1, float *u2);
@@ -57,9 +60,9 @@ void l3d_orig(int nx, int ny, int nz, float *u1, float *u2);
 
 double cpughz()
 {
-    uint64_t t0 = _rdtsc();
+    uint64_t t0 = rdtsc();
     sleep(1);
-    uint64_t onesec = _rdtsc() - t0;
+    uint64_t onesec = rdtsc() - t0;
     return onesec*1.0/1e9;
 }
 
@@ -157,12 +160,12 @@ int main(int argc, char **argv)
     }
 
     // run optimized version
-    uint64_t t0 = _rdtsc();
+    uint64_t t0 = rdtsc();
     for (i = 0;  i < iters;  ++i) {
         l3d(nx, padded_nx, ny, nz, u1, u2);
         foo = u1; u1 = u2; u2 = foo;
     }
-    uint64_t gold = _rdtsc() - t0;
+    uint64_t gold = rdtsc() - t0;
     double elapsed = gold / (ghz * 1e9);
 
     double grid_size = nx * ny * nz;
@@ -178,12 +181,12 @@ int main(int argc, char **argv)
 
     if (verify) {
         // run serial version for verification
-        uint64_t st0 = _rdtsc();
+        uint64_t st0 = rdtsc();
         for (i = 0;  i < iters;  ++i) {
             l3d_orig(nx, ny, nz, u1_orig, u2_orig);
             foo = u1_orig; u1_orig = u2_orig; u2_orig = foo;
         }
-        uint64_t ser = _rdtsc() - st0;
+        uint64_t ser = rdtsc() - st0;
         elapsed = ser / (ghz * 1e9);
         gflops_sec = gflops / elapsed;
         bw_realized = traffic / elapsed;
@@ -246,9 +249,18 @@ void l3d_auto(int nx, int padded_nx, int ny, int nz, float *u1, float *u2)
 
     float sixth = 1.0f/6.0f;
 
+#if defined(__INTEL_COMPILER)
     __assume(padded_nx%8==0);
     __assume_aligned(&u1[1],32);
     __assume_aligned(&u2[1],32);
+#elif defined(__GNUC__)
+    if (!(padded_nx%8==0))
+	__builtin_unreachable();
+#if __has_builtin(__builtin_assume_aligned)
+    __builtin_assume_aligned(&u1[1],32);
+    __builtin_assume_aligned(&u2[1],32);
+#endif
+#endif
 
     /* compute on the grid */
     #pragma omp parallel for private(i,j,k,ind)
