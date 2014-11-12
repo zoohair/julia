@@ -440,14 +440,12 @@ DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex)
         jl_lineno = last_lineno;
         jl_current_module = last_m;
         jl_current_task->current_module = task_last_m;
-        JL_UNLOCK(codegen)
         jl_rethrow();
     }
     jl_lineno = last_lineno;
     jl_current_module = last_m;
     jl_current_task->current_module = task_last_m;
     assert(v);
-    JL_UNLOCK(codegen)
     return v;
 }
 
