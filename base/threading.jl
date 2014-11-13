@@ -9,14 +9,14 @@ nthreads() = int(unsafe_load(cglobal(:jl_n_threads, Cint)))
 function _threadsfor(forexpr)
     fun = gensym("_threadsfor")
     lidx = forexpr.args[1].args[1]			# index
-    st = lst = forexpr.args[1].args[2].args[1]		# start
-    len = llen = forexpr.args[1].args[2].args[2]	# length
+    lf = forexpr.args[1].args[2].args[1]		# first
+    ll = forexpr.args[1].args[2].args[2]		# last
     lbody = forexpr.args[2]				# body
     quote
 	function $fun()
 	    tid = threadid()
 	    # divide loop iterations among threads
-	    len, rem = divrem($llen, nthreads())
+	    len, rem = divrem($ll-$lf+1, nthreads())
             # not enough iterations for all the threads?
             if len == 0
                 if tid > rem
@@ -25,18 +25,20 @@ function _threadsfor(forexpr)
                 len, rem = 1, 0
             end
             # compute this thread's range
-	    st = $lst + ((tid-1) * len)
+	    f = $lf + ((tid-1) * len)
+	    l = f + len - 1
             # distribute remaining iterations evenly
 	    if rem > 0
 		if tid <= rem
-		    st = st + (tid-1)
-		    len = len + 1
+		    f = f + (tid-1)
+		    l = l + tid
 		else
-		    st = st + rem
+		    f = f + rem
+		    l = l + rem
 		end
 	    end
             # run this thread's iterations
-	    for $(esc(lidx)) = range(st, len)
+	    for $(esc(lidx)) = f:l
 		$(esc(lbody))
 	    end
 	end
