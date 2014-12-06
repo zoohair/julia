@@ -74,7 +74,7 @@ static const char *opts =
     " --check-bounds={yes|no}  Emit bounds checks always or never (ignoring declarations)\n"
     " -O, --optimize           Run time-intensive code optimizations\n"
     " --int-literals={32|64}   Select integer literal size independent of platform\n"
-    " --dump-bitcode={yes|no}  Dump bitcode for the system image (used with --build)\n"
+    " --dump-bitcode={yes|no}  Dump bitcode for the cache image (used with --build)\n"
     " --depwarn={yes|no}       Enable or disable syntax and method deprecation warnings\n";
 
 void parse_opts(int *argcp, char ***argvp)
@@ -327,8 +327,6 @@ static int true_main(int argc, char *argv[])
     return iserr;
 }
 
-DLLEXPORT extern void julia_save();
-
 #ifndef _OS_WINDOWS_
 int main(int argc, char *argv[])
 {
@@ -355,7 +353,6 @@ int wmain(int argc, wchar_t *argv[], wchar_t *envp[])
     julia_init(imagepathspecified ? JL_IMAGE_CWD : JL_IMAGE_JULIA_HOME);
     int ret = true_main(argc, (char**)argv);
     jl_atexit_hook();
-    julia_save();
     return ret;
 }
 

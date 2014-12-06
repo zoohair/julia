@@ -48,7 +48,7 @@ endif
 debug release: | $(DIRS) $(build_datarootdir)/julia/base $(build_datarootdir)/julia/test $(build_docdir) $(build_sysconfdir)/julia/juliarc.jl $(build_man1dir)/julia.1
 	@$(MAKE) $(QUIET_MAKE) julia-$@
 	@export private_libdir=$(private_libdir) && \
-	$(MAKE) $(QUIET_MAKE) LD_LIBRARY_PATH=$(build_libdir):$(LD_LIBRARY_PATH) JULIA_EXECUTABLE="$(JULIA_EXECUTABLE_$@)" $(build_private_libdir)/sys.$(SHLIB_EXT)
+	$(MAKE) $(QUIET_MAKE) LD_LIBRARY_PATH=$(build_libdir):$(LD_LIBRARY_PATH) JULIA_EXECUTABLE="$(JULIA_EXECUTABLE_$@)" $(build_private_libdir)/Base.$(SHLIB_EXT)
 
 release-candidate: release test
 	@#Check documentation
@@ -123,12 +123,12 @@ $(build_sysconfdir)/julia/juliarc.jl: contrib/windows/juliarc.jl
 endif
 
 # use sys.ji if it exists, otherwise run two stages
-$(build_private_libdir)/sys%ji: $(build_private_libdir)/sys%o
+$(build_private_libdir)/%.ji: $(build_private_libdir)/%.o
 
-.SECONDARY: $(build_private_libdir)/sys.o
-.SECONDARY: $(build_private_libdir)/sys0.o
+.SECONDARY: $(build_private_libdir)/Base.o
+.SECONDARY: $(build_private_libdir)/0/Base.o
 
-$(build_private_libdir)/sys%$(SHLIB_EXT): $(build_private_libdir)/sys%o
+$(build_private_libdir)/%.$(SHLIB_EXT): $(build_private_libdir)/%.o
 ifneq ($(USEMSVC), 1)
 	@$(call PRINT_LINK, $(CXX) -shared -fPIC -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir) -o $@ $< \
 		$$([ $(OS) = Darwin ] && echo '' -Wl,-undefined,dynamic_lookup || echo '' -Wl,--unresolved-symbols,ignore-all ) \
@@ -138,17 +138,19 @@ else
 	@true
 endif
 
-$(build_private_libdir)/sys0.o:
+$(build_private_libdir)/0/Base.o:
 	@$(call PRINT_JULIA, cd base && \
-	$(call spawn,$(JULIA_EXECUTABLE)) -C $(JULIA_CPU_TARGET) --build $(call cygpath_w,$(build_private_libdir)/sys0) sysimg.jl)
+	$(call spawn,$(JULIA_EXECUTABLE)) -C $(JULIA_CPU_TARGET) --build $(call cygpath_w,$(build_private_libdir)/0) sysimg.jl)
 
 BASE_SRCS := $(wildcard base/*.jl base/*/*.jl base/*/*/*.jl)
 
+# This rule defines $(,) to be an escaped ',' character
 ,:=,
-$(build_private_libdir)/sys.o: VERSION $(BASE_SRCS) $(build_docdir)/helpdb.jl $(build_private_libdir)/sys0.$(SHLIB_EXT)
+
+$(build_private_libdir)/Base.o: VERSION $(BASE_SRCS) $(build_docdir)/helpdb.jl $(build_private_libdir)/0/Base.o
 	@$(call PRINT_JULIA, cd base && \
 	$(call spawn,$(JULIA_EXECUTABLE)) -C $(JULIA_CPU_TARGET) --build $(call cygpath_w,$(build_private_libdir)/sys) \
-		-J$(call cygpath_w,$(build_private_libdir))/$$([ -e $(build_private_libdir)/sys.ji ] && echo sys.ji || echo sys0.ji) -f sysimg.jl \
+		-J$(call cygpath_w,$(build_private_libdir))/$$([ -e $(build_private_libdir)/Base.ji ] && echo Base.ji || echo 0/Base.ji) -f sysimg.jl \
 		|| { echo '*** This error is usually fixed by running `make clean`. If the error persists$(,) try `make cleanall`. ***' && false; } )
 
 $(build_bindir)/stringreplace: contrib/stringreplace.c | $(build_bindir)
@@ -269,8 +271,8 @@ endif
 endif
 	$(INSTALL_F) src/julia.h src/julia_version.h src/options.h src/support/*.h $(DESTDIR)$(includedir)/julia
 	# Copy system image
-	$(INSTALL_F) $(build_private_libdir)/sys.ji $(DESTDIR)$(private_libdir)
-	$(INSTALL_M) $(build_private_libdir)/sys.$(SHLIB_EXT) $(DESTDIR)$(private_libdir)
+	$(INSTALL_F) $(build_private_libdir)/Base.ji $(DESTDIR)$(private_libdir)
+	$(INSTALL_M) $(build_private_libdir)/Base.$(SHLIB_EXT) $(DESTDIR)$(private_libdir)
 	# Copy in system image build script
 	$(INSTALL_M) contrib/build_sysimg.jl $(DESTDIR)$(datarootdir)/julia/
 	# Copy in all .jl sources as well
@@ -310,7 +312,7 @@ endif
 
 	# Overwrite JL_SYSTEM_IMAGE_PATH in julia library
 	for julia in $(DESTDIR)$(private_libdir)/libjulia*.$(SHLIB_EXT) ; do \
-		$(call spawn,$(build_bindir)/stringreplace $$(strings -t x - $$julia | grep "sys.ji$$" | awk '{print $$1;}' ) "$(private_libdir_rel)/sys.ji" 256 $(call cygpath_w,$$julia)); \
+		$(call spawn,$(build_bindir)/stringreplace $$(strings -t x - $$julia | grep "Base.ji$$" | awk '{print $$1;}' ) "$(private_libdir_rel)/Base.ji" 256 $(call cygpath_w,$$julia)); \
 	done
 endif
 
@@ -345,15 +347,15 @@ ifeq ($(OS), Darwin)
 	-cat ./contrib/mac/juliarc.jl >> $(DESTDIR)$(prefix)/etc/julia/juliarc.jl
 endif
 
-	# purge sys.{dll,so,dylib} as that file is not relocatable across processor architectures
+	# purge Base.{dll,so,dylib} as that file is not relocatable across processor architectures
 ifeq ($(JULIA_CPU_TARGET), native)
-	-rm -f $(DESTDIR)$(private_libdir)/sys.$(SHLIB_EXT)
+	-rm -f $(DESTDIR)$(private_libdir)/Base.$(SHLIB_EXT)
 endif
 
 ifeq ($(OS), WINNT)
 ifeq ($(ARCH),x86_64)
 	# If we are running on WIN64, also delete sys.dll until we switch to llvm3.5+
-	-rm -f $(DESTDIR)$(private_libdir)/sys.$(SHLIB_EXT)
+	-rm -f $(DESTDIR)$(private_libdir)/Base.$(SHLIB_EXT)
 endif
 
 	[ ! -d dist-extras ] || ( cd dist-extras && \
