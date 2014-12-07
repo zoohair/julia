@@ -23,7 +23,7 @@ default: release
 endif
 
 # sort is used to remove potential duplicates
-DIRS = $(sort $(build_bindir) $(build_libdir) $(build_private_libdir) $(build_libexecdir) $(build_sysconfdir)/julia $(build_datarootdir)/julia $(build_man1dir))
+DIRS = $(sort $(build_bindir) $(build_libdir) $(build_private_libdir) $(build_private_libdir)/0 $(build_libexecdir) $(build_sysconfdir)/julia $(build_datarootdir)/julia $(build_man1dir))
 
 $(foreach dir,$(DIRS),$(eval $(call dir_target,$(dir))))
 $(foreach link,base test,$(eval $(call symlink_target,$(link),$(build_datarootdir)/julia)))
@@ -138,7 +138,7 @@ else
 	@true
 endif
 
-$(build_private_libdir)/0/Base.o:
+$(build_private_libdir)/0/Base.o: $(build_private_libdir)/0
 	@$(call PRINT_JULIA, cd base && \
 	$(call spawn,$(JULIA_EXECUTABLE)) -C $(JULIA_CPU_TARGET) --build $(call cygpath_w,$(build_private_libdir)/0) sysimg.jl)
 
@@ -149,7 +149,7 @@ BASE_SRCS := $(wildcard base/*.jl base/*/*.jl base/*/*/*.jl)
 
 $(build_private_libdir)/Base.o: VERSION $(BASE_SRCS) $(build_docdir)/helpdb.jl $(build_private_libdir)/0/Base.o
 	@$(call PRINT_JULIA, cd base && \
-	$(call spawn,$(JULIA_EXECUTABLE)) -C $(JULIA_CPU_TARGET) --build $(call cygpath_w,$(build_private_libdir)/sys) \
+	$(call spawn,$(JULIA_EXECUTABLE)) -C $(JULIA_CPU_TARGET) --build $(call cygpath_w,$(build_private_libdir)) \
 		-J$(call cygpath_w,$(build_private_libdir))/$$([ -e $(build_private_libdir)/Base.ji ] && echo Base.ji || echo 0/Base.ji) -f sysimg.jl \
 		|| { echo '*** This error is usually fixed by running `make clean`. If the error persists$(,) try `make cleanall`. ***' && false; } )
 
