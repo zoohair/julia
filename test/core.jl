@@ -1974,3 +1974,19 @@ function f9134()
     end
 end
 @test_throws UndefVarError f9134()
+
+# issue #5333
+immutable I5333
+    a::Int
+    b::Int
+end
+type T5333
+    a::Int
+    b::Int
+end
+let i = I5333(1,2), t = T5333(1,2)
+    @test I5333(i;b=3) === I5333(1,3)
+    @test I5333(i;a=3) === I5333(3,2)
+    @test_throws MethodError T5333(t;a=3)
+    @test_throws MethodError T5333(t;b=3)
+end
