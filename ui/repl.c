@@ -297,8 +297,8 @@ static int true_main(int argc, char *argv[])
         return ret;
     }
 
-    jl_function_t *start_client =
-        (jl_function_t*)jl_get_global(jl_base_module, jl_symbol("_start"));
+    jl_function_t *start_client = jl_base_module ?
+        (jl_function_t*)jl_get_global(jl_base_module, jl_symbol("_start")) : NULL;
 
     if (start_client) {
         jl_apply(start_client, NULL, 0);
@@ -309,20 +309,41 @@ static int true_main(int argc, char *argv[])
 
  again:
     ;
-    JL_TRY {
-        if (iserr) {
-            //jl_show(jl_exception_in_transit);# What if the error was in show?
-            jl_printf(JL_STDERR, "\n\n");
-            iserr = 0;
+    char *line = NULL;
+    while (!ios_eof(ios_stdin)) {
+        JL_TRY {
+            if (iserr) {
+                //jl_show(jl_exception_in_transit);# What if the error was in show?
+                jl_printf(JL_STDERR, "\nerror in printing:\n");
+                jl_static_show(JL_STDOUT, jl_exception_in_transit);
+                JL_PUTS("\n",JL_STDOUT);
+                iserr = 0;
+            } else {
+                ios_puts("\njulia> ", ios_stdout);
+                ios_flush(ios_stdout);
+                line = ios_readline(ios_stdin);
+                jl_value_t *val = jl_eval_string(line);
+                if (jl_exception_occurred()) {
+                    JL_PUTS("error during run:\n", JL_STDERR);
+                    jl_static_show(JL_STDOUT, jl_exception_in_transit);
+                    jl_exception_clear();
+                } else if (val) {
+                    jl_static_show(JL_STDOUT, val);
+                }
+                JL_PUTS("\n", JL_STDOUT);
+                free(line);
+                line = NULL;
+            }
+            uv_run(jl_global_event_loop(),UV_RUN_NOWAIT);
         }
-        uv_run(jl_global_event_loop(),UV_RUN_DEFAULT);
-    }
-    JL_CATCH {
-        iserr = 1;
-        JL_PUTS("error during run:\n",JL_STDERR);
-        jl_show(jl_stderr_obj(),jl_exception_in_transit);
-        JL_PUTS("\n",JL_STDOUT);
-        goto again;
+        JL_CATCH {
+            if (line) {
+                free(line);
+                line = NULL;
+            }
+            iserr = 1;
+            goto again;
+        }
     }
     return iserr;
 }
