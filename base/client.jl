@@ -221,6 +221,12 @@ function process_options(args::Vector{UTF8String})
     while i <= length(args)
         if args[i]=="-q" || args[i]=="--quiet"
             quiet = true
+        elseif args[i]=="--machinerepl"
+            while !eof(STDIN)
+                eval(Main, deserialize(STDIN))
+            end
+            exit(0)
+            # doesn't return
         elseif args[i]=="--worker"
             start_worker()
             # doesn't return

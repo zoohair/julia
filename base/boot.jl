@@ -266,11 +266,11 @@ GotoNode(n::Int) = ccall(:jl_new_struct, Any, (Any,Any...), GotoNode, n)::GotoNo
 QuoteNode(x::ANY) = ccall(:jl_new_struct, Any, (Any,Any...), QuoteNode, x)::QuoteNode
 NewvarNode(s::Symbol) = ccall(:jl_new_struct, Any, (Any,Any...), NewvarNode, s)::NewvarNode
 TopNode(s::Symbol) = ccall(:jl_new_struct, Any, (Any,Any...), TopNode, s)::TopNode
+Task(f::ANY) = ccall(:jl_new_task, Any, (Any, Int), f::Function, 0)::Task
+Box(contents::ANY) = ccall(:jl_new_box, Any, (Any,), contents)::Box
 
 Module(name::Symbol) = ccall(:jl_f_new_module, Any, (Any,), name)::Module
 Module() = Module(:anonymous)
-
-Task(f::ANY) = ccall(:jl_new_task, Any, (Any, Int), f::Function, 0)::Task
 
 # simple convert for use by constructors of types in Core
 convert(::Type{Any}, x::ANY) = x

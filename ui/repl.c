@@ -39,7 +39,6 @@ extern "C" {
 static int lisp_prompt = 0;
 static int codecov  = JL_LOG_NONE;
 static int malloclog= JL_LOG_NONE;
-static char *program = NULL;
 static int imagepathspecified = 0;
 
 static const char *usage = "julia [options] [program] [args...]\n";
@@ -209,14 +208,9 @@ void parse_opts(int *argcp, char ***argvp)
     optind -= skip;
     *argvp += optind;
     *argcp -= optind;
-    if (jl_compileropts.image_file==NULL && *argcp > 0) {
-        if (strcmp((*argvp)[0], "-")) {
-            program = (*argvp)[0];
-        }
-    }
 }
 
-static int exec_program(void)
+static int exec_program(char *program)
 {
     int err = 0;
  again: ;
@@ -290,19 +284,19 @@ static int true_main(int argc, char *argv[])
         }
     }
 
-    // run program if specified, otherwise enter REPL
-    if (program) {
-        int ret = exec_program();
-        uv_tty_reset_mode();
-        return ret;
-    }
-
     jl_function_t *start_client = jl_base_module ?
         (jl_function_t*)jl_get_global(jl_base_module, jl_symbol("_start")) : NULL;
 
     if (start_client) {
         jl_apply(start_client, NULL, 0);
         return 0;
+    }
+
+    // run program if specified, otherwise enter REPL
+    if (argc > 0) {
+        if (strcmp(argv[0], "-")) {
+            return exec_program(argv[0]);
+        }
     }
 
     int iserr = 0;

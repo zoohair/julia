@@ -36,7 +36,7 @@ macro deprecate(old,new)
 end
 
 function depwarn(msg, funcsym)
-    if bool(compileropts().depwarn)
+    if bool(JLCompilerOpts().depwarn)
         bt = backtrace()
         caller = firstcaller(bt, funcsym)
         warn(msg, once=(caller!=C_NULL), key=caller, bt=bt)

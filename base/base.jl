@@ -30,6 +30,7 @@ call(T::Type{NewvarNode}, s::Symbol) = Core.call(T, s)
 call(T::Type{TopNode}, s::Symbol) = Core.call(T, s)
 call(T::Type{Module}, args...) = Core.call(T, args...)
 call(T::Type{Task}, f::ANY) = Core.call(T, f)
+call(T::Type{Box}, contents::ANY) = Core.call(T, contents)
 
 call{T}(::Type{T}, args...) = convert(T, args...)::T
 

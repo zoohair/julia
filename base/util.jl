@@ -259,10 +259,10 @@ immutable JLCompilerOpts
     depwarn::Int8
 end
 
-compileropts() = unsafe_load(cglobal(:jl_compileropts, JLCompilerOpts))
+JLCompilerOpts() = unsafe_load(cglobal(:jl_compileropts, JLCompilerOpts))
 
 function julia_cmd(julia=joinpath(JULIA_HOME, "julia"))
-    opts = compileropts()
+    opts = JLCompilerOpts()
     cpu_target = bytestring(opts.cpu_target)
     image_file = bytestring(opts.image_file)
     `$julia -C$cpu_target -J$image_file`
