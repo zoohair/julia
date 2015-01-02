@@ -869,8 +869,14 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             ": ccall: missing return type";
         jl_error(msg.c_str());
     }
-    if (rt == (jl_value_t*)jl_pointer_type)
-        jl_error("ccall: return type Ptr should have an element type, Ptr{T}");
+    if (jl_is_cpointer_type(rt) && jl_is_typevar(jl_tparam0(rt)))
+        jl_error("ccall: return type Ptr should have an element type, not Ptr{_<:T}");
+
+    if (jl_is_abstract_ref_type(rt)) {
+        if (jl_tparam0(rt) == (jl_value_t*)jl_any_type)
+            jl_error("ccall: return type Box{Any} is invalid. use Ptr{Any} instead.");
+        rt = (jl_value_t*)jl_any_type; // convert return type to jl_value_t*
+    }
 
     JL_TYPECHK(ccall, type, rt);
     Type *lrt = julia_struct_to_llvm(rt);
@@ -916,54 +922,70 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         paramattrs.push_back(AttrBuilder());
 #endif
         jl_value_t *tti = jl_tupleref(tt,i);
-        if (tti == (jl_value_t*)jl_pointer_type)
-            jl_error("ccall: argument type Ptr should have an element type, Ptr{T}");
+
         if (jl_is_vararg_type(tti)) {
             isVa = true;
             tti = jl_tparam0(tti);
         }
-        if (jl_is_bitstype(tti)) {
-            // see pull req #978. need to annotate signext/zeroext for
-            // small integer arguments.
-            jl_datatype_t *bt = (jl_datatype_t*)tti;
-            if (bt->size < 4) {
-                if (jl_signed_type == NULL) {
-                    jl_signed_type = jl_get_global(jl_core_module,jl_symbol("Signed"));
-                }
-#if LLVM33
-                Attribute::AttrKind av;
-#elif LLVM32
-                Attributes::AttrVal av;
-#else
-                Attribute::AttrConst av;
-#endif
-#if LLVM32 && !LLVM33
-                if (jl_signed_type && jl_subtype(tti, jl_signed_type, 0))
-                    av = Attributes::SExt;
-                else
-                    av = Attributes::ZExt;
-#else
-                if (jl_signed_type && jl_subtype(tti, jl_signed_type, 0))
-                    av = Attribute::SExt;
-                else
-                    av = Attribute::ZExt;
-#endif
-#if LLVM32 || LLVM33
-                paramattrs[i+sret].addAttribute(av);
-#else
-                attrs.push_back(AttributeWithIndex::get(i+1+sret, av));
-#endif
+
+        Type *t = NULL;
+        if (jl_is_abstract_ref_type(tti)) {
+            tti = jl_tparam0(tti);
+            if (jl_is_typevar(tti))
+                jl_error("ccall: argument type Ref should have an element type, not Ref{_<:T}");
+            if (tti == (jl_value_t*)jl_any_type) {
+                t = jl_ppvalue_llvmt;
+            }
+            else {
+                t = T_pint8;
             }
         }
-        Type *t = julia_struct_to_llvm(tti);
-        if (t == NULL || t == T_void) {
-            JL_GC_POP();
-            std::stringstream msg;
-            msg << "ccall: the type of argument ";
-            msg << i+1;
-            msg << " doesn't correspond to a C type";
-            emit_error(msg.str(), ctx);
-            return literal_pointer_val(jl_nothing);
+        else {
+            if (jl_is_cpointer_type(tti) && jl_is_typevar(jl_tparam0(tti)))
+                jl_error("ccall: argument type Ptr should have an element type, not Ptr{_<:T}");
+            if (jl_is_bitstype(tti)) {
+                // see pull req #978. need to annotate signext/zeroext for
+                // small integer arguments.
+                jl_datatype_t *bt = (jl_datatype_t*)tti;
+                if (bt->size < 4) {
+                    if (jl_signed_type == NULL) {
+                        jl_signed_type = jl_get_global(jl_core_module,jl_symbol("Signed"));
+                    }
+#if LLVM33
+                    Attribute::AttrKind av;
+#elif LLVM32
+                    Attributes::AttrVal av;
+#else
+                    Attribute::AttrConst av;
+#endif
+#if LLVM32 && !LLVM33
+                    if (jl_signed_type && jl_subtype(tti, jl_signed_type, 0))
+                        av = Attributes::SExt;
+                    else
+                        av = Attributes::ZExt;
+#else
+                    if (jl_signed_type && jl_subtype(tti, jl_signed_type, 0))
+                        av = Attribute::SExt;
+                    else
+                        av = Attribute::ZExt;
+#endif
+#if LLVM32 || LLVM33
+                    paramattrs[i+sret].addAttribute(av);
+#else
+                    attrs.push_back(AttributeWithIndex::get(i+1+sret, av));
+#endif
+                }
+            }
+            t = julia_struct_to_llvm(tti);
+            if (t == NULL || t == T_void) {
+                JL_GC_POP();
+                std::stringstream msg;
+                msg << "ccall: the type of argument ";
+                msg << i+1;
+                msg << " doesn't correspond to a C type";
+                emit_error(msg.str(), ctx);
+                return literal_pointer_val(jl_nothing);
+            }
         }
         fargt.push_back(t);
         if (!isVa)
@@ -1013,6 +1035,8 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         if (jl_is_expr(argi) && ((jl_expr_t*)argi)->head == amp_sym) {
             addressOf = true;
             argi = jl_exprarg(argi,0);
+        } else if (jl_is_abstract_ref_type(jl_tupleref(tt,0))) {
+            addressOf = true;
         }
         Value *ary = boxed(emit_expr(argi, ctx),ctx);
         JL_GC_POP();
@@ -1046,7 +1070,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     }
 
     if (0 && f_name != NULL) {
-        // print the f_name before each ccall
+        // print the f_name before each ccall (for testing)
         Value *zeros[2] = { ConstantInt::get(T_int32, 0),
                             ConstantInt::get(T_int32, 0) };
         std::stringstream msg;
@@ -1105,7 +1129,19 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         }
         Value *arg;
         bool needroot = false;
-        if (largty == jl_pvalue_llvmt || largty->isStructTy()) {
+        if (jl_is_abstract_ref_type(jargty)) {
+            //rewrite: argi = convert(Ptr{Void}, argi)
+            jl_expr_t *new_argi = jl_exprn(call_sym, 3);
+            JL_GC_PUSH(new_argi);
+            new_argi->etype = (jl_value_t*)jl_voidpointer_type;
+            jl_cellset(new_argi->args, 0, jl_get_global(topmod(ctx), jl_symbol("convert")));
+            jl_cellset(new_argi->args, 1, new_argi->etype);
+            jl_cellset(new_argi->args, 2, argi); // todo: ensure argi gets rooted
+            arg = emit_unbox(largty, emit_unboxed((jl_value_t*)new_argi, ctx), (jl_value_t*)jl_voidpointer_type);
+            jargty = (jl_value_t*)jl_voidpointer_type;
+            JL_GC_POP();
+        }
+        else if (largty == jl_pvalue_llvmt || largty->isStructTy()) {
             arg = emit_expr(argi, ctx, true);
             if (largty == jl_pvalue_llvmt && arg->getType() != jl_pvalue_llvmt) {
                 arg = boxed(arg,ctx);
@@ -1133,6 +1169,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         if (largty == jl_pvalue_llvmt && (needroot || might_need_root(argi))) {
             make_gcroot(arg, ctx);
         }
+        // todo: also root args[i+1]
 #endif
 
         bool mightNeed=false;

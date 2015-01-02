@@ -45,6 +45,7 @@ include("number.jl")
 include("int.jl")
 include("operators.jl")
 include("pointer.jl")
+include("refpointer.jl")
 
 # rounding utilities
 include("rounding.jl")
