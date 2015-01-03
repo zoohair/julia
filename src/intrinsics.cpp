@@ -32,7 +32,7 @@ namespace JL_I {
         ceil_llvm, floor_llvm, trunc_llvm, rint_llvm,
         sqrt_llvm, powi_llvm,
         // pointer access
-        pointerref, pointerset, pointertoref,
+        pointerref, pointerset,
         // c interface
         ccall, cglobal, jl_alloca, llvmcall
     };
@@ -773,13 +773,6 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     HANDLE(zext_int,2)    return generic_zext(args[1], args[2], ctx);
     HANDLE(pointerref,2)  return emit_pointerref(args[1], args[2], ctx);
     HANDLE(pointerset,3)  return emit_pointerset(args[1], args[2], args[3], ctx);
-    HANDLE(pointertoref,1) {
-        Value *p = auto_unbox(args[1], ctx);
-        if (p->getType()->isIntegerTy()) {
-            return builder.CreateIntToPtr(p, jl_pvalue_llvmt);
-        }
-        return builder.CreateBitCast(p, jl_pvalue_llvmt);
-    }
     HANDLE(checked_fptosi,2) {
         Value *x = FP(auto_unbox(args[2], ctx));
         return emit_checked_fptosi(args[1], x, ctx);
@@ -1279,7 +1272,7 @@ extern "C" void jl_init_intrinsic_functions(void)
     ADD_I(flipsign_int); ADD_I(select_value);
     ADD_I(ceil_llvm); ADD_I(floor_llvm); ADD_I(trunc_llvm); ADD_I(rint_llvm);
     ADD_I(sqrt_llvm); ADD_I(powi_llvm);
-    ADD_I(pointerref); ADD_I(pointerset); ADD_I(pointertoref);
+    ADD_I(pointerref); ADD_I(pointerset);
     ADD_I(checked_sadd); ADD_I(checked_uadd);
     ADD_I(checked_ssub); ADD_I(checked_usub);
     ADD_I(checked_smul); ADD_I(checked_umul);

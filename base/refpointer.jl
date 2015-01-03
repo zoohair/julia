@@ -14,12 +14,11 @@ Ref{T}(x::T) = RefValue{T}(x)
 Ref{T}(x::Ptr{T}, i::Integer=1) = x + (i-1)*Core.sizeof(T)
 Ref(x, i::Integer) = (i != 1 && error("Object only has one element"); Ref(x))
 
-_addrof{T}(b::T) = ccall(:jl_value_ptr,Ptr{T},(Ptr{Any},),&b)
 function Base.convert{T}(P::Type{Ptr{T}}, b::RefValue{T})
     if isbits(T) || T == Any
-        return convert(P, _addrof(b))
+        return convert(P, data_pointer_from_objref(b))
     else
-        return convert(P, _addrof(b.x))
+        return convert(P, data_pointer_from_objref(b.x))
     end
 end
 Base.convert{T}(::Type{Ptr{Void}}, b::RefValue{T}) = Base.convert(Ptr{Void}, Base.convert(Ptr{T}, b))
@@ -44,7 +43,7 @@ function Base.convert{T}(P::Type{Ptr{T}}, b::RefArray{T})
     if isbits(T) || T == Any
         convert(P, pointer(b.x, b.i))
     else
-        convert(P, RefValue(b.x[b.i]))
+        convert(P, data_pointer_from_objref(b.x[b.i]))
     end
 end
 Base.convert{T}(::Type{Ptr{Void}}, b::RefArray{T}) = Base.convert(Ptr{Void}, Base.convert(Ptr{T}, b))
@@ -63,7 +62,7 @@ function Base.convert{T}(P::Type{Ptr{T}}, b::RefArrayND{T})
     if isbits(T) || T == Any
         convert(P, pointer(b.x, b.i...))
     else
-        convert(P, RefValue(b.x[b.i...]))
+        convert(P, data_pointer_from_objref(b.x[b.i...]))
     end
 end
 Base.convert{T}(::Type{Ptr{Void}}, b::RefArrayND{T}) = Base.convert(Ptr{Void}, Base.convert(Ptr{T}, b))
@@ -82,7 +81,7 @@ function Base.convert{T}(P::Type{Ptr{T}}, b::RefArrayI{T})
     if isbits(T) || T == Any
         convert(P, pointer(b.x, b.i...))
     else
-        convert(P, RefValue(b.x[b.i...]))
+        convert(P, data_pointer_from_objref(b.x[b.i...]))
     end
 end
 Base.convert{T}(::Type{Ptr{Void}}, b::RefArrayI{T}) = Base.convert(Ptr{Void}, Base.convert(Ptr{T}, b))
