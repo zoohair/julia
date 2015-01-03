@@ -933,12 +933,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             tti = jl_tparam0(tti);
             if (jl_is_typevar(tti))
                 jl_error("ccall: argument type Ref should have an element type, not Ref{_<:T}");
-            if (tti == (jl_value_t*)jl_any_type) {
-                t = jl_ppvalue_llvmt;
-            }
-            else {
-                t = T_pint8;
-            }
+            t = T_pint8;
         }
         else {
             if (jl_is_cpointer_type(tti) && jl_is_typevar(jl_tparam0(tti)))

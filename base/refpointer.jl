@@ -5,6 +5,7 @@ type RefValue{T} <: Ref{T}
     RefValue() = new()
     RefValue(x) = new(x)
 end
+convert{T}(::Type{Ref{T}}, x::Ref{T}) = x
 convert{T}(::Type{Ref{T}}, x) = RefValue{T}(x)
 call{T}(::Type{Ref{T}}) = RefValue{T}()
 eltype{T}(x::Type{Ref{T}}) = T
