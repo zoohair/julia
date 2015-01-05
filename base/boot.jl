@@ -273,8 +273,7 @@ QuoteNode(x::ANY) = ccall(:jl_new_struct, Any, (Any,Any...), QuoteNode, x)::Quot
 NewvarNode(s::Symbol) = ccall(:jl_new_struct, Any, (Any,Any...), NewvarNode, s)::NewvarNode
 TopNode(s::Symbol) = ccall(:jl_new_struct, Any, (Any,Any...), TopNode, s)::TopNode
 
-Module(name::Symbol) = ccall(:jl_f_new_module, Any, (Any,), name)::Module
-Module() = Module(:anonymous)
+Module(name::Symbol=:anonymous, bare::Bool=false) = ccall(:jl_f_new_module, Any, (Any, Int8), name, bare)::Module
 
 Task(f::ANY) = ccall(:jl_new_task, Any, (Any, Int), f::Function, 0)::Task
 
