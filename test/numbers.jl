@@ -2092,3 +2092,6 @@ end
 
 # test second branch, after all small primes in list have been searched
 @test factor(10009 * int128(1000000000000037)) == Dict(10009=>1,1000000000000037=>1)
+
+# fix 0x2^big(9) = big(512), while 0x2^9 = 0x0
+@test 0x2^9 === 0x2^big(9) === 0x0
