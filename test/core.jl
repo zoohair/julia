@@ -958,8 +958,9 @@ immutable Foo2509; foo::Int; end
 
 # issue #2517
 immutable Foo2517; end
-@test repr(Foo2517()) == "Foo2517()"
-@test repr(Array(Foo2517,1)) == "[Foo2517()]"
+fooname = string(join(tuple(fullname(current_module())..., "Foo2517"), "."), "()")
+@test repr(Foo2517()) == fooname
+@test repr(Array(Foo2517,1)) == "[$fooname]"
 @test Foo2517() === Foo2517()
 
 # issue #1474

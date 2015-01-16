@@ -25,74 +25,84 @@ ccall(:jl_exit_on_sigint, Void, (Cint,), 0)
 # in the mix. If verification needs to be done, keep it to the bare minimum. Basically
 # this should make sure nothing crashes without depending on how exactly the control
 # characters are being used.
-begin
-stdin_write, stdout_read, stdout_read, repl = fake_repl()
+inc = gensym("inc")
+b = gensym("b")
+c = gensym("c")
+Core.eval(Main, :(let stdin_write, stdout_read, stdout_read, repl, repltask, sendrepl, origpwd, tempdir
+    global $b, $c, $inc
+    stdin_write, stdout_read, stderr_read, repl = $fake_repl()
 
-repl.specialdisplay = Base.REPL.REPLDisplay(repl)
-repl.no_history_file = true
+    repl.specialdisplay = Base.REPL.REPLDisplay(repl)
+    repl.no_history_file = true
 
-repltask = @async begin
-    Base.REPL.run_repl(repl)
-end
+    repltask = @async begin
+        Base.REPL.run_repl(repl)
+    end
 
-sendrepl(cmd) = write(stdin_write,"inc || wait(b); r = $cmd; notify(c); r\r")
+    function sendrepl(cmd)
+        inc = "symbol(\"$($(string(inc)))\")"
+        b = "symbol(\"$($(string(b)))\")"
+        c = "symbol(\"$($(string(c)))\")"
+        cmd = "let r; Main.($inc) || wait(Main.($b)); r = $cmd; notify(Main.($c)); r; end\r"
+        write(stdin_write,cmd)
+    end
 
-inc = false
-b = Condition()
-c = Condition()
-sendrepl("\"Hello REPL\"")
-inc=true
-begin
-    notify(b)
-    wait(c)
-end
-# Latex completions
-write(stdin_write, "\x32\\alpha\t")
-readuntil(stdout_read, "α")
-# Bracketed paste in search mode
-write(stdin_write, "\e[200~paste here ;)\e[201~")
-# Abort search (^C)
-write(stdin_write, '\x03')
-# Test basic completion in main mode
-write(stdin_write, "Base.REP\t")
-readuntil(stdout_read, "Base.REPL")
-write(stdin_write, '\x03')
-write(stdin_write, "\\alpha\t")
-readuntil(stdout_read,"α")
-write(stdin_write, '\x03')
-# Test cd feature in shell mode.  We limit to 40 characters when
-# calling readuntil() to suppress the warning it (currently) gives for
-# long strings.
-origpwd = pwd()
-tmpdir = mktempdir()
-write(stdin_write, ";")
-readuntil(stdout_read, "shell> ")
-write(stdin_write, "cd $(escape_string(tmpdir))\n")
-readuntil(stdout_read, "cd $(escape_string(tmpdir))"[max(1,end-39):end])
-readuntil(stdout_read, realpath(tmpdir)[max(1,end-39):end])
-readuntil(stdout_read, "\n")
-readuntil(stdout_read, "\n")
-@test pwd() == realpath(tmpdir)
-write(stdin_write, ";")
-readuntil(stdout_read, "shell> ")
-write(stdin_write, "cd -\n")
-readuntil(stdout_read, origpwd[max(1,end-39):end])
-readuntil(stdout_read, "\n")
-readuntil(stdout_read, "\n")
-@test pwd() == origpwd
-write(stdin_write, ";")
-readuntil(stdout_read, "shell> ")
-write(stdin_write, "cd\n")
-readuntil(stdout_read, homedir()[max(1,end-39):end])
-readuntil(stdout_read, "\n")
-readuntil(stdout_read, "\n")
-@test pwd() == homedir()
-rm(tmpdir)
-cd(origpwd)
-# Close REPL ^D
-write(stdin_write, '\x04')
-wait(repltask)
-end
+    $inc = false
+    $b = Condition()
+    $c = Condition()
+    sendrepl("\"Hello REPL\"")
+    $inc=true
+    begin
+        notify($b)
+        wait($c)
+    end
+    # Latex completions
+    write(stdin_write, "\x32\\alpha\t")
+    readuntil(stdout_read, "α")
+    # Bracketed paste in search mode
+    write(stdin_write, "\e[200~paste here ;)\e[201~")
+    # Abort search (^C)
+    write(stdin_write, '\x03')
+    # Test basic completion in main mode
+    write(stdin_write, "Base.REP\t")
+    readuntil(stdout_read, "Base.REPL")
+    write(stdin_write, '\x03')
+    write(stdin_write, "\\alpha\t")
+    readuntil(stdout_read,"α")
+    write(stdin_write, '\x03')
+    # Test cd feature in shell mode.  We limit to 40 characters when
+    # calling readuntil() to suppress the warning it (currently) gives for
+    # long strings.
+    origpwd = pwd()
+    tmpdir = mktempdir()
+    write(stdin_write, ";")
+    readuntil(stdout_read, "shell> ")
+    write(stdin_write, "cd $(escape_string(tmpdir))\n")
+    readuntil(stdout_read, "cd $(escape_string(tmpdir))"[max(1,end-39):end])
+    readuntil(stdout_read, realpath(tmpdir)[max(1,end-39):end])
+    readuntil(stdout_read, "\n")
+    readuntil(stdout_read, "\n")
+    Base.Test.@test pwd() == realpath(tmpdir)
+    write(stdin_write, ";")
+    readuntil(stdout_read, "shell> ")
+    write(stdin_write, "cd -\n")
+    readuntil(stdout_read, origpwd[max(1,end-39):end])
+    readuntil(stdout_read, "\n")
+    readuntil(stdout_read, "\n")
+    Base.Test.@test pwd() == origpwd
+    write(stdin_write, ";")
+    readuntil(stdout_read, "shell> ")
+    write(stdin_write, "cd\n")
+    readuntil(stdout_read, homedir()[max(1,end-39):end])
+    readuntil(stdout_read, "\n")
+    readuntil(stdout_read, "\n")
+    Base.Test.@test pwd() == homedir()
+    rm(tmpdir)
+    cd(origpwd)
+    # Close REPL ^D
+    write(stdin_write, '\x04')
+    wait(repltask)
+end))
 
 function buffercontents(buf::IOBuffer)
     p = position(buf)
