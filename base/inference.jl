@@ -24,12 +24,13 @@ type CallStack
     mod::Module
     types::Tuple
     recurred::Bool
-    cycleid::Int
+    rec::Bool
+    toprec::Bool
     result
     prev::Union(EmptyCallStack,CallStack)
     sv::StaticVarInfo
 
-    CallStack(ast, mod, types::ANY, prev) = new(ast, mod, types, false, 0, Bottom, prev)
+    CallStack(ast, mod, types::ANY, prev) = new(ast, mod, types, false, false, false, Bottom, prev)
 end
 
 inference_stack = EmptyCallStack()
@@ -1263,16 +1264,15 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
     #dotrace = true
     local ast::Expr, tfunc_idx
     curtype = Bottom
-    redo = false
     # check cached t-functions
     tf = def.tfunc
+    tfunc_idx = 0 # because we skip type-inference on typeinf, we fail to detect the usedUndef on this variable (without this statement)
     if !is(tf,())
         tfarr = tf::Array{Any,1}
         for i = 1:3:length(tfarr)
             if typeseq(tfarr[i],atypes)
                 code = tfarr[i+1]
                 if tfarr[i+2]
-                    redo = true
                     tfunc_idx = i+1
                     curtype = code
                     break
@@ -1283,7 +1283,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
         end
     end
     # TODO: typeinf currently gets stuck without this
-    if linfo.name === :abstract_interpret || linfo.name === :tuple_elim_pass || linfo.name === :abstract_call_gf
+    if linfo.name === :abstract_interpret || linfo.name === :tuple_elim_pass || linfo.name === :abstract_call_gf || linfo.name === :typeinf
         return (linfo.ast, Any)
     end
 
@@ -1309,13 +1309,16 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
     while !isa(f,EmptyCallStack)
         if (is(f.ast,ast0) || f.ast==ast0) && typeseq(f.types, atypes)
             # return best guess so far
-            (f::CallStack).recurred = true
-            (f::CallStack).cycleid = CYCLE_ID
+            f = f::CallStack
+            f.recurred = true
+            f.toprec = f.toprec || !f.rec
+            f.rec = true
             r = inference_stack
             while !is(r, f)
                 # mark all frames that are part of the cycle
                 r.recurred = true
-                r.cycleid = CYCLE_ID
+                r.toprec = false
+                r.rec = true
                 r = r.prev
             end
             CYCLE_ID += 1
@@ -1362,9 +1365,6 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
     frame = CallStack(ast0, linfo.module, atypes, inference_stack)
     inference_stack = frame
     frame.result = curtype
-
-    rec = false
-    toprec = false
 
     s = Any[ () for i=1:n ]
     # initial types
@@ -1460,10 +1460,6 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
             stmt = body[pc]
             changes = abstract_interpret(stmt, s[pc], sv)
             if frame.recurred
-                rec = true
-                if !(isa(frame.prev,CallStack) && frame.prev.cycleid == frame.cycleid)
-                    toprec = true
-                end
                 push!(recpts, pc)
                 #if dbg
                 #    show(pc); print(" recurred\n")
@@ -1523,10 +1519,6 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
                     pc´ = n+1
                     rt = abstract_eval_arg(stmt.args[1], s[pc], sv)
                     if frame.recurred
-                        rec = true
-                        if !(isa(frame.prev,CallStack) && frame.prev.cycleid == frame.cycleid)
-                            toprec = true
-                        end
                         push!(recpts, pc)
                         #if dbg
                         #    show(pc); print(" recurred\n")
@@ -1586,12 +1578,12 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
 
     #print("\n",ast,"\n")
     #if dbg print("==> ", frame.result,"\n") end
-    if (toprec && typeseq(curtype, frame.result)) || !isa(frame.prev,CallStack)
-        rec = false
+    if (frame.toprec && typeseq(curtype, frame.result))
+        frame.rec = false
     end
     fulltree = type_annotate(ast, s, sv, frame.result, args)
 
-    if !rec
+    if !frame.rec
         @assert fulltree.args[3].head === :body
         if compileropts().can_inline == 1
             fulltree.args[3] = inlining_pass(fulltree.args[3], sv, fulltree)[1]
@@ -1604,7 +1596,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
         fulltree = ccall(:jl_compress_ast, Any, (Any,Any), def, fulltree)
     end
 
-    if !redo
+    if tfunc_idx == 0
         if is(def.tfunc,())
             def.tfunc = []
         end
@@ -1623,11 +1615,11 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
         tfarr[idx] = atypes
         # in the "rec" state this tree will not be used again, so store
         # just the return type in place of it.
-        tfarr[idx+1] = rec ? frame.result : fulltree
-        tfarr[idx+2] = rec
+        tfarr[idx+1] = frame.rec ? frame.result : fulltree
+        tfarr[idx+2] = frame.rec
     else
-        def.tfunc[tfunc_idx] = rec ? frame.result : fulltree
-        def.tfunc[tfunc_idx+1] = rec
+        def.tfunc[tfunc_idx] = frame.rec ? frame.result : fulltree
+        def.tfunc[tfunc_idx+1] = frame.rec
     end
 
     inference_stack = (inference_stack::CallStack).prev

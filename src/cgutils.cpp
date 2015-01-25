@@ -867,8 +867,8 @@ static void emit_typecheck(Value *x, jl_value_t *type, const std::string &msg,
     builder.SetInsertPoint(failBB);
 
     emit_type_error(x, type, msg, ctx);
+    builder.CreateUnreachable();
 
-    builder.CreateBr(passBB);
     ctx->f->getBasicBlockList().push_back(passBB);
     builder.SetInsertPoint(passBB);
 }
@@ -1722,8 +1722,8 @@ static void emit_cpointercheck(Value *x, const std::string &msg,
     builder.SetInsertPoint(failBB);
 
     emit_type_error(x, (jl_value_t*)jl_pointer_type, msg, ctx);
+    builder.CreateUnreachable();
 
-    builder.CreateBr(passBB);
     ctx->f->getBasicBlockList().push_back(passBB);
     builder.SetInsertPoint(passBB);
 }
