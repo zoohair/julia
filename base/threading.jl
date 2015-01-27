@@ -9,8 +9,8 @@ nthreads() = int(unsafe_load(cglobal(:jl_n_threads, Cint)))
 function _threadsfor(forexpr)
     fun = gensym("_threadsfor")
     lidx = forexpr.args[1].args[1]			# index
-    lf = forexpr.args[1].args[2].args[1]		# first
-    ll = forexpr.args[1].args[2].args[2]		# last
+    lf = esc(forexpr.args[1].args[2].args[1])		# first
+    ll = esc(forexpr.args[1].args[2].args[2])		# last
     lbody = forexpr.args[2]				# body
     quote
 	function $fun()
