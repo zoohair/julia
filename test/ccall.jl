@@ -81,7 +81,7 @@ end
 ci32 = Complex{Int32}(int32(10),int32(31))
 ba = ccall((:test_2a, "./libccalltest"), Complex{Int32}, (Complex{Int32},), ci32)
 bb = ccall((:test_2b, "./libccalltest"), Complex{Int32}, (Complex{Int32},), ci32)
-@test ba == bb == ci32 + 1 - 2im 
+@test ba == bb == ci32 + 1 - 2im
 @test ci32 == Complex{Int32}(int32(10),int32(31))
 
 ci64 = Complex{Int64}(int64(20),int64(51))

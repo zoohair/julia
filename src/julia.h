@@ -167,7 +167,7 @@ typedef struct _jl_lambda_info_t {
     void *cFunctionObject;      // c callable llvm Function
 
     // specialized llvm Function (common core for the other two)
-    void *specFunctionObject; 
+    void *specFunctionObject;
     int32_t functionID; // index that this function will have in the codegen table
     int32_t specFunctionID; // index that this specFunction will have in the codegen table
 } jl_lambda_info_t;

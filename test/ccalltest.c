@@ -267,7 +267,7 @@ struct1 test_1(struct1 a) {
 }
 
 struct1 add_1(struct1 a, struct1 b) {
-    // Two small structs 
+    // Two small structs
     struct1 c;
     c.x = a.x + b.x;
     c.y = a.y + b.y;
@@ -312,7 +312,7 @@ struct4 test_4(struct4 a)
     a.x += 1;
     a.y -= 2;
     a.z += 3;
-    return a;    
+    return a;
 }
 
 
@@ -324,7 +324,7 @@ struct5 test_5(struct5 a)
     a.z += 3;
     a.a -= 4;
 
-    return a;    
+    return a;
 }
 
 
@@ -334,7 +334,7 @@ struct6 test_6(struct6 a)
     a.x += 1;
     a.y -= 2;
     a.z += 3;
-    return a;    
+    return a;
 }
 
 struct7 test_7(struct7 a)
@@ -342,7 +342,7 @@ struct7 test_7(struct7 a)
     if (verbose) printf("(%" PRId64 ",%" PRId8 ")\n", a.x, a.y);
     a.x += 1;
     a.y -= 2;
-    return a;    
+    return a;
 }
 
 struct8 test_8(struct8 a)
@@ -350,7 +350,7 @@ struct8 test_8(struct8 a)
     if (verbose) printf("(%" PRId32 ",%" PRId8 ")\n", a.x, a.y);
     a.x += 1;
     a.y -= 2;
-    return a;    
+    return a;
 }
 
 struct9 test_9(struct9 a)
@@ -358,7 +358,7 @@ struct9 test_9(struct9 a)
     if (verbose) printf("(%" PRId32 ",%" PRId16 ")\n", a.x, a.y);
     a.x += 1;
     a.y -= 2;
-    return a;    
+    return a;
 }
 
 struct10 test_10(struct10 a)
@@ -369,7 +369,7 @@ struct10 test_10(struct10 a)
     a.z += 3;
     a.a -= 4;
 
-    return a;    
+    return a;
 }
 
 struct14 test_14(struct14 a) {
