@@ -13,14 +13,14 @@ script:
           case $f in
                doc/*.rst )
                    export run_doc_tests=1
-               ;;
+               \;\;
                test/*/*.jl ) #Not part of the test suite
-                   ;;
+               \;\;
                [bet]*/*.jl )
                    export run_julia_tests=1
-               ;;
+               \;\;
                    *)
-               ;;
+               \;\;
           esac
       done;
     - if test $run_doc_tests -eq 1; then
