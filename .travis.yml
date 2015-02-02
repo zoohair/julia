@@ -4,7 +4,5 @@ notifications:
 script:
     - echo Current commit is $TRAVIS_COMMIT
     - echo Current commit range is $TRAVIS_COMMIT_RANGE
-    - PARENT_BRANCH=`git show-branch | grep '*' | grep -v "$(git rev-parse --abbrev-ref HEAD)" | head -n1 | sed 's/.*\[\(.*\)\].*/\1/' | sed 's/[\^~].*//'`; echo $PARENT_BRANCH #Magic command from http://stackoverflow.com/questions/3161204/find-the-parent-branch-of-a-branch
-    - export PARENT_BRANCH=`git show-branch | grep '*' | grep -v "$(git rev-parse --abbrev-ref HEAD)" | head -n1 | sed 's/.*\[\(.*\)\].*/\1/' | sed 's/[\^~].*//'`; echo $PARENT_BRANCH #Magic command from http://stackoverflow.com/questions/3161204/find-the-parent-branch-of-a-branch
-    - echo parent branch is $PARENT_BRANCH
-
+    - export FILES_CHANGED=$(git diff --name-only $TRAVIS_COMMIT_RANGE); echo $FILES_CHANGED
+    - echo $FILES_CHANGED
