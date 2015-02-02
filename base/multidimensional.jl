@@ -189,11 +189,9 @@ stagedfunction checksize(A::AbstractArray, I...)
     end
 end
 
-@inline unsafe_getindex(v::BitArray, ind::Int) = Base.unsafe_bitgetindex(v.chunks, ind)
 
 @inline unsafe_setindex!{T}(v::Array{T}, x::T, ind::Int) = (@inbounds v[ind] = x; v)
 @inline unsafe_setindex!{T}(v::AbstractArray{T}, x::T, ind::Int) = (v[ind] = x; v)
-@inline unsafe_setindex!(v::BitArray, x::Bool, ind::Int) = (Base.unsafe_bitsetindex!(v.chunks, x, ind); v)
 @inline unsafe_setindex!{T}(v::AbstractArray{T}, x::T, ind::Real) = unsafe_setindex!(v, x, to_index(ind))
 
 # Version that uses cartesian indexing for src
@@ -652,22 +650,6 @@ end
 
 # contiguous multidimensional indexing: if the first dimension is a range,
 # we can get some performance from using copy_chunks!
-
-function unsafe_setindex!(B::BitArray, X::BitArray, I0::UnitRange{Int})
-    l0 = length(I0)
-    l0 == 0 && return B
-    f0 = first(I0)
-    copy_chunks!(B.chunks, f0, X.chunks, 1, l0)
-    return B
-end
-
-function unsafe_setindex!(B::BitArray, x::Bool, I0::UnitRange{Int})
-    l0 = length(I0)
-    l0 == 0 && return B
-    f0 = first(I0)
-    fill_chunks!(B.chunks, x, f0, l0)
-    return B
-end
 
 stagedfunction unsafe_setindex!(B::BitArray, X::BitArray, I0::UnitRange{Int}, I::Union(Int,UnitRange{Int})...)
     N = length(I)
