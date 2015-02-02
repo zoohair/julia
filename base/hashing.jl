@@ -142,15 +142,10 @@ end
 
 const hashis_seed = UInt === UInt64 ? 0x88989f1fc7dea67d : 0xc7dea67d
 function hash(s::IntSet, h::UInt)
-    h += hashis_seed
-    h += hash(s.fill1s)
-    filln = s.fill1s ? ~zero(eltype(s.bits)) : zero(eltype(s.bits))
-    for x in s.bits
-        if x != filln
-            h = hash(x, h)
-        end
-    end
-    return h
+    # Only hash the bits array up to the last-set bit to prevent extra empty
+    # bits from changing the hash result
+    l = findprev(s.bits, length(s.bits))
+    hash(unsafe_getindex(s.bits, 1:l), h) $ hash(s.inverse) $ hashis_seed
 end
 
 # hashing ranges by component at worst leads to collisions for very similar ranges
