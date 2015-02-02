@@ -230,7 +230,11 @@ static Value *runtime_sym_lookup(PointerType *funcptype, char *f_lib, char *f_na
 #    include "abi_x86_64.cpp"
 #  endif
 #else
-#  include "abi_x86.cpp"
+#  if defined _OS_WINDOWS_
+#    include "abi_win32.cpp"
+#  else
+#    include "abi_x86.cpp"
+#  endif
 #endif
 
 Value *llvm_type_rewrite(Value *v, Type *target_type, jl_value_t *ty, bool isret)

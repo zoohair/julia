@@ -18,7 +18,7 @@ clean:
 .PHONY: $(TESTS) perf clean
 
 libccalltest.$(SHLIB_EXT): ccalltest.c
-	$(CC) $(CFLAGS) $(DEBUGFLAGS) -O3 $< -fPIC -shared -o $@ $(LDFLAGS) -DCC=$(CC)
+	$(CC) $(CFLAGS) $(DEBUGFLAGS) -O3 $< $(fPIC) -shared -o $@ $(LDFLAGS) -DCC=$(CC)
 all ccall: libccalltest.$(SHLIB_EXT)
 
 ccalltest: ccalltest.c
