@@ -2,7 +2,33 @@ language: cpp
 notifications:
     email: false
 script:
+    - git diff-index --check --cached $TRAVIS_COMMIT -- #Quick git whitespace check
     - echo Current commit is $TRAVIS_COMMIT
     - echo Current commit range is $TRAVIS_COMMIT_RANGE
-    - export FILES_CHANGED=$(git diff --name-only $TRAVIS_COMMIT_RANGE); echo $FILES_CHANGED
-    - echo $FILES_CHANGED
+    - export run_doc_tests=0;
+      export run_julia_tests=0;
+      export filelist=$(git diff --name-only $TRAVIS_COMMIT_RANGE 2>/dev/null | sort | uniq);
+      for f in $filelist
+      do
+          case $f in
+               doc/*.rst )
+                   export run_doc_tests=1
+               ;;
+               test/*/*.jl ) #Not part of the test suite
+                   ;;
+               [bet]*/*.jl )
+                   export run_julia_tests=1
+               ;;
+                   *)
+               ;;
+          esac
+      done;
+    - if test $run_doc_tests -eq 1; then
+        echo "Running doc tests"
+        echo sphinx-build
+      fi
+    - if test $run_julia_tests -eq 1; then
+        echo "Running julia tests"
+        echo make test
+      fi
+
