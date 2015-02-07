@@ -444,8 +444,8 @@ function rehash!{K,V}(h::Dict{K,V}, newsz = length(h.slots))
                 iter = 0
                 maxprobe = max(16, sz>>6)
                 k = keys[from]
-                h = hash(k)
-                index = ((h%Int) & (sz-1)) + 1
+                hashk = hash(k)
+                index = ((hashk%Int) & (sz-1)) + 1
                 while iter <= maxprobe
                     si = olds[index]
                     (si == 0 || si == from) && break
@@ -454,7 +454,7 @@ function rehash!{K,V}(h::Dict{K,V}, newsz = length(h.slots))
                     iter += 1
                 end
                 if !isdeleted
-                    index = ((h%Int) & (newsz-1)) + 1
+                    index = ((hashk%Int) & (newsz-1)) + 1
                     while slots[index] != 0
                         index = (index & (newsz-1)) + 1
                     end
