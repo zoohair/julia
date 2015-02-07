@@ -39,7 +39,7 @@ rehash!(s::Set) = (rehash!(s.dict); s)
 start(s::Set)       = start(s.dict)
 done(s::Set, state) = done(s.dict, state)
 # NOTE: manually optimized to take advantage of Dict representation
-next(s::Set, i)     = (s.dict.keys[i], skip_deleted(s.dict,i+1))
+next(s::Set, i)     = (s.dict.keys[i], i+1)
 
 union() = Set()
 union(s::Set) = copy(s)
