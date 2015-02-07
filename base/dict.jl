@@ -418,25 +418,6 @@ end
 
 hashindex(key, sz) = ((hash(key)%Int) & (sz-1)) + 1
 
-function isdeleted{K}(keys::Vector{K}, ki, slots)
-    if isbits(K)
-        sz = length(slots)
-        iter = 0
-        maxprobe = max(16, sz>>6)
-        index = hashindex(keys[ki], sz)
-        while iter <= maxprobe
-            si = slots[index]
-            (si == 0 || si == ki) && return false
-            si == -ki && return true
-            index = (index & (sz-1)) + 1
-            iter += 1
-        end
-        return false
-    else
-        !isdefined(keys, ki)
-    end
-end
-
 function rehash!{K,V}(h::Dict{K,V}, newsz = length(h.slots))
     olds = h.slots
     keys = h.keys
@@ -457,18 +438,45 @@ function rehash!{K,V}(h::Dict{K,V}, newsz = length(h.slots))
 
     if h.ndel > 0
         to = 1
-        @inbounds for from = 1:length(keys)
-            if !isdeleted(keys, from, olds)
-                # TODO avoid computing hash twice for isbits
+        if isbits(K)
+            @inbounds for from = 1:length(keys)
+                isdeleted = false
+                iter = 0
+                maxprobe = max(16, sz>>6)
                 k = keys[from]
-                index = hashindex(k, newsz)
-                while slots[index] != 0
-                    index = (index & (newsz-1)) + 1
+                h = hash(k)
+                index = ((h%Int) & (sz-1)) + 1
+                while iter <= maxprobe
+                    si = olds[index]
+                    (si == 0 || si == from) && break
+                    si == -from && (isdeleted=true; break)
+                    index = (index & (sz-1)) + 1
+                    iter += 1
                 end
-                slots[index] = to
-                keys[to] = k
-                vals[to] = vals[from]
-                to += 1
+                if !isdeleted
+                    index = ((h%Int) & (newsz-1)) + 1
+                    while slots[index] != 0
+                        index = (index & (newsz-1)) + 1
+                    end
+                    slots[index] = to
+                    keys[to] = k
+                    vals[to] = vals[from]
+                    to += 1
+                end
+            end
+        else
+            @inbounds for from = 1:length(keys)
+                if isdefined(keys, from)
+                    k = keys[from]
+                    index = hashindex(k, newsz)
+                    while slots[index] != 0
+                        index = (index & (newsz-1)) + 1
+                    end
+                    slots[index] = to
+                    keys[to] = k
+                    vals[to] = vals[from]
+                    to += 1
+                end
             end
         end
         resize!(keys, to-1)
