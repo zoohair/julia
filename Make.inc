@@ -687,10 +687,12 @@ endif
 
 ifeq ($(OS), WINNT)
 ifneq ($(USEMSVC), 1)
+SHIPFLAGS += -gdwarf-2
+DEBUGFLAGS += -gdwarf-2
 HAVE_SSP = 1
 OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(JULIAHOME)/src/julia.expmap \
-	$(NO_WHOLE_ARCHIVE) -lpsapi -lkernel32 -lws2_32 -liphlpapi -lwinmm -ldbghelp
-JLDFLAGS = -Wl,--stack,8388608
+	$(NO_WHOLE_ARCHIVE) -lpsapi -lkernel32 -lws2_32 -liphlpapi -lwinmm
+LDFLAGS = -Wl,--stack,8388608
 ifeq ($(ARCH),i686)
 JLDFLAGS += -Wl,--large-address-aware
 endif
