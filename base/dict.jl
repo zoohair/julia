@@ -444,7 +444,7 @@ function rehash!{K,V}(h::Dict{K,V}, newsz = length(h.slots))
         newvals = similar(vals, count0)
         @inbounds for from = 1:length(keys)
             if !ptrs || isdefined(keys, from)
-                k, v = keys[from], vals[from]
+                k = keys[from]
                 hashk = hash(k)
                 isdeleted = false
                 if !ptrs
@@ -468,7 +468,7 @@ function rehash!{K,V}(h::Dict{K,V}, newsz = length(h.slots))
                     end
                     slots[index] = to
                     newkeys[to] = k
-                    newvals[to] = v
+                    newvals[to] = vals[from]
                     to += 1
                 end
                 if h.ndel != ndel0
