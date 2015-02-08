@@ -27,7 +27,15 @@ in(x, s::Set) = haskey(s.dict, x)
 push!(s::Set, x) = (s.dict[x] = nothing; s)
 pop!(s::Set, x) = (pop!(s.dict, x); x)
 pop!(s::Set, x, deflt) = pop!(s.dict, x, deflt) == deflt ? deflt : x
-pop!(s::Set) = (val = s.dict.keys[start(s.dict)]; delete!(s.dict, val); val)
+function pop!(s::Set)
+    if s.dict.ndel == 0
+        val = s.dict.keys[end]
+    else
+        val = s.dict.keys[maximum(s.dict.slots)]
+    end
+    delete!(s.dict, val)
+    val
+end
 delete!(s::Set, x) = (delete!(s.dict, x); s)
 
 copy(s::Set) = union!(similar(s), s)

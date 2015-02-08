@@ -437,21 +437,29 @@ function rehash!{K,V}(h::Dict{K,V}, newsz = length(h.slots))
     slots = zeros(Int32,newsz)
 
     if h.ndel > 0
+        ndel0 = h.ndel
+        ptrs = !isbits(K)
         to = 1
-        if isbits(K)
-            @inbounds for from = 1:length(keys)
-                isdeleted = false
-                iter = 0
-                maxprobe = max(16, sz>>6)
-                k = keys[from]
+        newkeys = similar(keys, count0)
+        newvals = similar(vals, count0)
+        @inbounds for from = 1:length(keys)
+            if !ptrs || isdefined(keys, from)
+                k, v = keys[from], vals[from]
                 hashk = hash(k)
-                index = ((hashk%Int) & (sz-1)) + 1
-                while iter <= maxprobe
-                    si = olds[index]
-                    (si == 0 || si == from) && break
-                    si == -from && (isdeleted=true; break)
-                    index = (index & (sz-1)) + 1
-                    iter += 1
+                isdeleted = false
+                if !ptrs
+                    iter = 0
+                    maxprobe = max(16, sz>>6)
+                    index = ((hashk%Int) & (sz-1)) + 1
+                    while iter <= maxprobe
+                        si = olds[index]
+                        #si == 0 && break  # shouldn't happen
+                        si == 0 && error("unexpected")
+                        si == from && break
+                        si == -from && (isdeleted=true; break)
+                        index = (index & (sz-1)) + 1
+                        iter += 1
+                    end
                 end
                 if !isdeleted
                     index = ((hashk%Int) & (newsz-1)) + 1
@@ -459,28 +467,19 @@ function rehash!{K,V}(h::Dict{K,V}, newsz = length(h.slots))
                         index = (index & (newsz-1)) + 1
                     end
                     slots[index] = to
-                    keys[to] = k
-                    vals[to] = vals[from]
+                    newkeys[to] = k
+                    newvals[to] = v
                     to += 1
                 end
-            end
-        else
-            @inbounds for from = 1:length(keys)
-                if isdefined(keys, from)
-                    k = keys[from]
-                    index = hashindex(k, newsz)
-                    while slots[index] != 0
-                        index = (index & (newsz-1)) + 1
-                    end
-                    slots[index] = to
-                    keys[to] = k
-                    vals[to] = vals[from]
-                    to += 1
+                if h.ndel != ndel0
+                    # if items are removed by finalizers, retry
+                    return rehash!(h, newsz)
                 end
             end
         end
-        resize!(keys, to-1)
-        resize!(vals, to-1)
+        h.keys = newkeys
+        h.vals = newvals
+        h.ndel = 0
     else
         @inbounds for i = 1:count0
             k = keys[i]
@@ -489,18 +488,14 @@ function rehash!{K,V}(h::Dict{K,V}, newsz = length(h.slots))
                 index = (index & (newsz-1)) + 1
             end
             slots[index] = i
-        end
-    end
-
-    # TODO restore this piece of logic:
-#=
-            if h.count != count0
+            if h.ndel > 0
                 # if items are removed by finalizers, retry
                 return rehash!(h, newsz)
             end
-=#
+        end
+    end
+
     h.slots = slots
-    h.ndel = 0
     est = div(newsz*2, 3)
     sizehint!(h.keys, est)
     sizehint!(h.vals, est)
@@ -539,7 +534,7 @@ function ht_keyindex{K,V}(h::Dict{K,V}, key, direct)
     index = hashindex(key, sz)
     keys = h.keys
 
-    @inbounds while true
+    @inbounds while iter <= maxprobe
         si = slots[index]
         si == 0 && break
         if si > 0 && isequal(key, keys[si])
@@ -548,7 +543,6 @@ function ht_keyindex{K,V}(h::Dict{K,V}, key, direct)
 
         index = (index & (sz-1)) + 1
         iter+=1
-        iter > maxprobe && break
     end
 
     return -1
@@ -565,7 +559,7 @@ function ht_keyindex2{K,V}(h::Dict{K,V}, key)
     index = hashindex(key, sz)
     keys = h.keys
 
-    @inbounds while true
+    @inbounds while iter <= maxprobe
         si = slots[index]
         if si == 0
             return -index
@@ -575,7 +569,6 @@ function ht_keyindex2{K,V}(h::Dict{K,V}, key)
 
         index = (index & (sz-1)) + 1
         iter+=1
-        iter > maxprobe && break
     end
 
     rehash!(h, length(h) > 64000 ? sz*2 : sz*4)
@@ -597,8 +590,11 @@ function _setindex!(h::Dict, v, key, index)
     sz = length(h.slots)
     cnt = nk - h.ndel
     # Rehash now if necessary
-    if h.ndel >= ((3*nk)>>2) || cnt*3 > sz*2
-        # > 3/4 deleted or > 2/3 full
+    if h.ndel >= ((3*nk)>>2)
+        # > 3/4 deleted
+        rehash!(h)
+    elseif cnt*3 > sz*2
+        # > 2/3 full
         rehash!(h, cnt > 64000 ? sz*2 : sz*4)
     end
 end
@@ -613,8 +609,8 @@ function setindex!{K,V}(h::Dict{K,V}, v0, key0)
     index = ht_keyindex2(h, key)
 
     if index > 0
-        h.keys[index] = key
-        h.vals[index] = v
+        @inbounds h.keys[index] = key
+        @inbounds h.vals[index] = v
     else
         _setindex!(h, v, key, -index)
     end
@@ -697,7 +693,7 @@ function getkey{K,V}(h::Dict{K,V}, key, default)
 end
 
 function _pop!(h::Dict, index)
-    val = h.vals[h.slots[index]]
+    @inbounds val = h.vals[h.slots[index]]
     _delete!(h, index)
     return val
 end
@@ -713,8 +709,8 @@ function pop!(h::Dict, key, default)
 end
 
 function _delete!(h::Dict, index)
-    ki = h.slots[index]
-    h.slots[index] = -ki
+    @inbounds ki = h.slots[index]
+    @inbounds h.slots[index] = -ki
     ccall(:jl_arrayunset, Void, (Any, UInt), h.keys, ki-1)
     ccall(:jl_arrayunset, Void, (Any, UInt), h.vals, ki-1)
     h.ndel += 1
