@@ -1245,11 +1245,9 @@ end
 
 function findin(a, b)
     ind = Array(Int, 0)
-    bset = union!(Set(), b)
-    for i = 1:length(a)
-        if in(a[i], bset)
-            push!(ind, i)
-        end
+    bset = Set(b)
+    @inbounds for i = 1:length(a)
+        a[i] in bset && push!(ind, i)
     end
     ind
 end
