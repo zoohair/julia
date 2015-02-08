@@ -101,17 +101,7 @@ const ⊆ = issubset
 ⊊(l::Set, r::Set) = <(l, r)
 ⊈(l::Set, r::Set) = !⊆(l, r)
 
-function unique(C)
-    out = Array(eltype(C),0)
-    seen = Set{eltype(C)}()
-    for x in C
-        if !in(x, seen)
-            push!(seen, x)
-            push!(out, x)
-        end
-    end
-    out
-end
+unique(C) = collect(Set(C))
 
 function filter(f::Function, s::Set)
     u = similar(s)
