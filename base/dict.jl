@@ -440,17 +440,20 @@ function rehash!{K,V}(h::Dict{K,V}, newsz = length(h.slots))
         ndel0 = h.ndel
         ptrs = !isbits(K)
         to = 1
+        # TODO: to get the best performance we need to avoid reallocating these.
+        # This algorithm actually works in place, unless the dict is modified
+        # due to GC during this process.
         newkeys = similar(keys, count0)
         newvals = similar(vals, count0)
         @inbounds for from = 1:length(keys)
             if !ptrs || isdefined(keys, from)
                 k = keys[from]
-                hashk = hash(k)
+                hashk = hash(k)%Int
                 isdeleted = false
                 if !ptrs
                     iter = 0
                     maxprobe = max(16, sz>>6)
-                    index = ((hashk%Int) & (sz-1)) + 1
+                    index = (hashk & (sz-1)) + 1
                     while iter <= maxprobe
                         si = olds[index]
                         #si == 0 && break  # shouldn't happen
@@ -461,7 +464,7 @@ function rehash!{K,V}(h::Dict{K,V}, newsz = length(h.slots))
                     end
                 end
                 if !isdeleted
-                    index = ((hashk%Int) & (newsz-1)) + 1
+                    index = (hashk & (newsz-1)) + 1
                     while slots[index] != 0
                         index = (index & (newsz-1)) + 1
                     end
@@ -585,12 +588,9 @@ function _setindex!(h::Dict, v, key, index)
     sz = length(h.slots)
     cnt = nk - h.ndel
     # Rehash now if necessary
-    if h.ndel >= ((3*nk)>>2)
-        # > 3/4 deleted
-        rehash!(h)
-    elseif cnt*3 > sz*2
-        # > 2/3 full
-        rehash!(h, cnt > 64000 ? sz*2 : sz*4)
+    if h.ndel >= ((3*nk)>>2) || cnt*3 > sz*2
+        # > 3/4 deleted or > 2/3 full
+        rehash!(h, cnt > 64000 ? cnt*2 : cnt*4)
     end
 end
 
