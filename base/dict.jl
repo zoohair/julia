@@ -454,7 +454,6 @@ function rehash!{K,V}(h::Dict{K,V}, newsz = length(h.slots))
                     while iter <= maxprobe
                         si = olds[index]
                         #si == 0 && break  # shouldn't happen
-                        si == 0 && error("unexpected")
                         si == from && break
                         si == -from && (isdeleted=true; break)
                         index = (index & (sz-1)) + 1
@@ -496,10 +495,6 @@ function rehash!{K,V}(h::Dict{K,V}, newsz = length(h.slots))
     end
 
     h.slots = slots
-    est = div(newsz*2, 3)
-    sizehint!(h.keys, est)
-    sizehint!(h.vals, est)
-
     return h
 end
 
