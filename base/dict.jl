@@ -318,6 +318,17 @@ end
 
 copy(o::ObjectIdDict) = ObjectIdDict(o)
 
+# Serializer type needed as soon as ObjectIdDict is available
+
+type Serializer{I<:IO}
+    io::I
+    counter::Int
+    table::ObjectIdDict
+    Serializer(io::I) = new(io, 0, ObjectIdDict())
+end
+
+Serializer(io::IO) = Serializer{typeof(io)}(io)
+
 # dict
 
 type Dict{K,V} <: Associative{K,V}
@@ -401,18 +412,20 @@ function convert{K,V}(::Type{Dict{K,V}},d::Associative)
 end
 convert{K,V}(::Type{Dict{K,V}},d::Dict{K,V}) = d
 
-function serialize(s, t::Dict)
+function serialize(s::Serializer, t::Dict)
+    serialize_cycle(s, t) && return
     serialize_type(s, typeof(t))
-    write(s, Int32(length(t)))
+    write(s.io, Int32(length(t)))
     for (k,v) in t
         serialize(s, k)
         serialize(s, v)
     end
 end
 
-function deserialize{K,V}(s, T::Type{Dict{K,V}})
-    n = read(s, Int32)
+function deserialize{K,V}(s::Serializer, T::Type{Dict{K,V}})
+    n = read(s.io, Int32)
     t = T(); sizehint!(t, n)
+    deserialize_cycle(s, t)
     for i = 1:n
         k = deserialize(s)
         v = deserialize(s)

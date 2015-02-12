@@ -220,12 +220,12 @@ promote_rule{T<:Integer}(::Type{BigInt}, ::Type{T}) = BigInt
 
 # serialization
 
-function serialize(s, n::BigInt)
+function serialize(s::Serializer, n::BigInt)
     Base.serialize_type(s, BigInt)
     serialize(s, base(62,n))
 end
 
-deserialize(s, ::Type{BigInt}) = get(tryparse_internal(BigInt, deserialize(s), 62, true))
+deserialize(s::Serializer, ::Type{BigInt}) = get(tryparse_internal(BigInt, deserialize(s), 62, true))
 
 # Binary ops
 for (fJ, fC) in ((:+, :add), (:-,:sub), (:*, :mul),
