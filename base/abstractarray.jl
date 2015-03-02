@@ -1125,8 +1125,8 @@ end
 
 # Generalized repmat
 function repeat{T}(A::Array{T};
-                   inner::Array{Int} = ones(Int, ndims(A)),
-                   outer::Array{Int} = ones(Int, ndims(A)))
+                   inner::Array{Int,1} = ones(Int, ndims(A)),
+                   outer::Array{Int,1} = ones(Int, ndims(A)))
     ndims_in = ndims(A)
     length_inner = length(inner)
     length_outer = length(outer)
@@ -1157,6 +1157,10 @@ function repeat{T}(A::Array{T};
     length_out = prod(size_out)
     R = Array(T, size_out...)
 
+    repmat_kwarg_impl(A,inner,outer,length_out, size_out, ndims_in, R, indices_in, indices_out,inner_size_out,size_in)
+end
+
+function repmat_kwarg_impl{T}(A::Array{T},inner,outer,length_out, size_out, ndims_in, R, indices_in, indices_out,inner_size_out,size_in)
     for index_out in 1:length_out
         ind2sub!(indices_out, size_out, index_out)
         for t in 1:ndims_in
