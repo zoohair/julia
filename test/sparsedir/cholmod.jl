@@ -461,3 +461,110 @@ for elty in (Float64, Complex{Float64})
 
     @test CHOLMOD.Sparse(CHOLMOD.Dense(A1Sparse)) == A1Sparse
 end
+
+
+Af = float([4 12 -16; 12 37 -43; -16 -43 98])
+As = sparse(Af)
+Lf = float([2 0 0; 6 1 0; -8 5 3])
+LDf = float([4 0 0; 3 1 0; -4 5 9])  # D is stored along the diagonal
+L_f = float([1 0 0; 3 1 0; -4 5 1])  # L by itself in LDLt of Af
+D_f = float([4 0 0; 0 1 0; 0 0 9])
+
+# cholfact, no permutation
+Fs = cholfact(As, [1:3;])
+@test Fs[:p] == [1:3;]
+@test_approx_eq sparse(Fs[:L]) Lf
+@test_approx_eq sparse(Fs) As
+b = rand(3)
+@test_approx_eq Fs\b As\b
+@test_approx_eq Fs[:L]\b Lf\b
+@test_approx_eq Fs[:U]\b Lf'\b
+@test_approx_eq Fs[:L]'\b Lf'\b
+@test_approx_eq Fs[:U]'\b Lf\b
+@test_approx_eq Fs[:PL]\b Lf\b
+@test_approx_eq Fs[:UPt]\b Lf'\b
+@test_approx_eq Fs[:PL]'\b Lf'\b
+@test_approx_eq Fs[:UPt]'\b Lf\b
+@test_throws MethodError Fs[:D]
+@test_throws MethodError Fs[:LD]
+@test_throws MethodError Fs[:DU]
+@test_throws MethodError Fs[:PLD]
+@test_throws MethodError Fs[:DUPt]
+
+# cholfact, with permutation
+p = [2,1,3]
+Fs = cholfact(As, p)
+@test Fs[:p] == p
+Asp = Af[p,p]
+Lfp = cholfact(Asp)[:L]
+@test_approx_eq sparse(Fs[:L]) Lfp
+@test_approx_eq sparse(Fs) As
+b = rand(3)
+@test_approx_eq Fs\b As\b
+@test_approx_eq Fs[:L]\b[p] Lfp\b[p]
+@test_approx_eq Fs[:U]\b[p] Lfp'\b[p]
+@test_approx_eq Fs[:L]'\b[p] Lfp'\b[p]
+@test_approx_eq Fs[:U]'\b[p] Lfp\b[p]
+@test_approx_eq Fs[:PL]\b Lfp\b[p]
+@test_approx_eq Fs[:UPt]\b (Lfp'\b)[p]
+@test_approx_eq Fs[:PL]'\b (Lfp'\b)[p]
+@test_approx_eq Fs[:UPt]'\b Lfp\b[p]
+@test_throws MethodError Fs[:D]
+@test_throws MethodError Fs[:LD]
+@test_throws MethodError Fs[:DU]
+@test_throws MethodError Fs[:PLD]
+@test_throws MethodError Fs[:DUPt]
+
+# ldltfact, no permutation
+Fs = ldltfact(As, [1:3;])
+@test Fs[:p] == [1:3;]
+@test_approx_eq sparse(Fs[:LD]) LDf
+@test_approx_eq sparse(Fs) As
+b = rand(3)
+@test_approx_eq Fs\b As\b
+@test_approx_eq Fs[:L]\b L_f\b
+@test_approx_eq Fs[:U]\b L_f'\b
+@test_approx_eq Fs[:L]'\b L_f'\b
+@test_approx_eq Fs[:U]'\b L_f\b
+@test_approx_eq Fs[:PL]\b L_f\b
+@test_approx_eq Fs[:UPt]\b L_f'\b
+@test_approx_eq Fs[:PL]'\b L_f'\b
+@test_approx_eq Fs[:UPt]'\b L_f\b
+@test_approx_eq Fs[:D]\b D_f\b
+@test_approx_eq Fs[:D]'\b D_f\b
+@test_approx_eq Fs[:LD]\b D_f\(L_f\b)
+@test_approx_eq Fs[:DU]'\b D_f\(L_f\b)
+@test_approx_eq Fs[:LD]'\b L_f'\(D_f\b)
+@test_approx_eq Fs[:DU]\b L_f'\(D_f\b)
+@test_approx_eq Fs[:PLD]\b D_f\(L_f\b)
+@test_approx_eq Fs[:DUPt]'\b D_f\(L_f\b)
+@test_approx_eq Fs[:PLD]'\b L_f'\(D_f\b)
+@test_approx_eq Fs[:DUPt]\b L_f'\(D_f\b)
+
+# ldltfact, with permutation
+p = [2,1,3]
+Fs = ldltfact(As, p)
+@test Fs[:p] == p
+@test_approx_eq sparse(Fs) As
+b = rand(3)
+Asp = As[p,p]
+LDp = sparse(ldltfact(Asp)[:LD])
+Lp, dp = Base.SparseMatrix.CHOLMOD.getLd!(copy(LDp))
+Dp = spdiagm(dp)
+@test_approx_eq Fs\b As\b
+@test_approx_eq Fs[:L]\b[p] Lp\b[p]
+@test_approx_eq Fs[:U]\b[p] Lp'\b[p]
+@test_approx_eq Fs[:L]'\b[p] Lp'\b[p]
+@test_approx_eq Fs[:U]'\b[p] Lp\b[p]
+@test_approx_eq Fs[:PL]\b Lp\b[p]
+@test_approx_eq Fs[:UPt]\b (Lp'\b)[p]
+@test_approx_eq Fs[:PL]'\b (Lp'\b)[p]
+@test_approx_eq Fs[:UPt]'\b Lp\b[p]
+@test_approx_eq Fs[:LD]\b[p] Dp\(Lp\b[p])
+@test_approx_eq Fs[:DU]'\b[p] Dp\(Lp\b[p])
+@test_approx_eq Fs[:LD]'\b[p] Lp'\(Dp\b[p])
+@test_approx_eq Fs[:DU]\b[p] Lp'\(Dp\b[p])
+@test_approx_eq Fs[:PLD]\b Dp\(Lp\b[p])
+@test_approx_eq Fs[:DUPt]'\b Dp\(Lp\b[p])
+@test_approx_eq Fs[:PLD]'\b (Lp'\(Dp\b))[p]
+@test_approx_eq Fs[:DUPt]\b (Lp'\(Dp\b))[p]
