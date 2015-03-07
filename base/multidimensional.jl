@@ -183,10 +183,13 @@ using .IteratorsMD
 
 stagedfunction checksize(A::AbstractArray, I...)
     N = length(I)
-    quote
-        @nexprs $N d->(size(A, d) == length(I[d]) || throw(DimensionMismatch("index $d has length $(length(I[d])), but size(A, $d) = $(size(A,d))")))
-        nothing
+    ex = Expr(:block)
+    push!(ex.args, :(idxlens = index_lengths(A, I...)))
+    for d=1:N
+        push!(ex.args, :(size(A, $d) == idxlens[$d] || throw(DimensionMismatch("index ", $d, " has length ", idxlens[$d], ", but size(A, ", $d, ") = ", size(A,$d)))))
     end
+    push!(ex.args, :(nothing))
+    ex
 end
 
 @inline unsafe_getindex(v::BitArray, ind::Int) = Base.unsafe_bitgetindex(v.chunks, ind)
@@ -197,7 +200,7 @@ end
 @inline unsafe_setindex!{T}(v::AbstractArray{T}, x::T, ind::Real) = unsafe_setindex!(v, x, to_index(ind))
 
 # Version that uses cartesian indexing for src
-stagedfunction _getindex!(dest::Array, src::AbstractArray, I::Union(Int,AbstractVector)...)
+stagedfunction _getindex!(dest::Array, src::AbstractArray, I::Union(Int,AbstractVector,Colon)...)
     N = length(I)
     Isplat = Expr[:(I[$d]) for d = 1:N]
     quote
@@ -212,7 +215,7 @@ stagedfunction _getindex!(dest::Array, src::AbstractArray, I::Union(Int,Abstract
 end
 
 # Version that uses linear indexing for src
-stagedfunction _getindex!(dest::Array, src::Array, I::Union(Int,AbstractVector)...)
+stagedfunction _getindex!(dest::Array, src::Array, I::Union(Int,AbstractVector,Colon)...)
     N = length(I)
     Isplat = Expr[:(I[$d]) for d = 1:N]
     quote
@@ -231,12 +234,12 @@ end
 
 # It's most efficient to call checkbounds first, then to_index, and finally
 # allocate the output. Hence the different variants.
-_getindex(A, I::(Union(Int,AbstractVector)...)) =
-    _getindex!(similar(A, index_shape(I...)), A, I...)
+_getindex(A, I::(Union(Int,AbstractVector,Colon)...)) =
+    _getindex!(similar(A, index_shape(A, I...)), A, I...)
 
 # The stagedfunction here is just to work around the performance hit
 # of splatting
-stagedfunction getindex(A::Array, I::Union(Real,AbstractVector)...)
+stagedfunction getindex(A::Array, I::Union(Real,AbstractVector,Colon)...)
     N = length(I)
     Isplat = Expr[:(I[$d]) for d = 1:N]
     quote
@@ -246,7 +249,7 @@ stagedfunction getindex(A::Array, I::Union(Real,AbstractVector)...)
 end
 
 # Also a safe version of getindex!
-stagedfunction getindex!(dest, src, I::Union(Real,AbstractVector)...)
+stagedfunction getindex!(dest, src, I::Union(Real,AbstractVector,Colon)...)
     N = length(I)
     Isplat = Expr[:(I[$d]) for d = 1:N]
     Jsplat = Expr[:(to_index(I[$d])) for d = 1:N]
@@ -257,21 +260,23 @@ stagedfunction getindex!(dest, src, I::Union(Real,AbstractVector)...)
 end
 
 
-stagedfunction setindex!(A::Array, x, J::Union(Real,AbstractArray)...)
+stagedfunction setindex!(A::Array, x, J::Union(Real,AbstractArray,Colon)...)
     N = length(J)
     if x<:AbstractArray
         ex=quote
             X = x
-            @ncall $N setindex_shape_check X I
+            idxlens = @ncall $N index_lengths A I
+            setindex_shape_check(X, idxlens...)
             Xs = start(X)
-            @nloops $N i d->(1:length(I_d)) d->(@inbounds offset_{d-1} = offset_d + (unsafe_getindex(I_d, i_d)-1)*stride_d) begin
+            @nloops $N i d->(1:idxlens[d]) d->(@inbounds offset_{d-1} = offset_d + (unsafe_getindex(I_d, i_d)-1)*stride_d) begin
                 v, Xs = next(X, Xs)
                 @inbounds A[offset_0] = v
             end
         end
     else
         ex=quote
-            @nloops $N i d->(1:length(I_d)) d->(@inbounds offset_{d-1} = offset_d + (unsafe_getindex(I_d, i_d)-1)*stride_d) begin
+            idxlens = @ncall $N index_lengths A I
+            @nloops $N i d->(1:idxlens[d]) d->(@inbounds offset_{d-1} = offset_d + (unsafe_getindex(I_d, i_d)-1)*stride_d) begin
                 @inbounds A[offset_0] = x
             end
         end
@@ -307,20 +312,23 @@ end
 
 ### subarray.jl
 
+# This is the code-generation block for SubArray's staged setindex! function:
+# _setindex!(V::SubArray, x, J::Union(Real,AbstractVector,Colon)...)
 function gen_setindex_body(N::Int)
     quote
         Base.Cartesian.@nexprs $N d->(J_d = J[d])
         Base.Cartesian.@ncall $N checkbounds V J
         Base.Cartesian.@nexprs $N d->(I_d = Base.to_index(J_d))
+        idxlens = @ncall $N index_lengths V I
         if !isa(x, AbstractArray)
-            Base.Cartesian.@nloops $N i d->(1:length(I_d)) d->(@inbounds j_d = Base.unsafe_getindex(I_d, i_d)) begin
+            Base.Cartesian.@nloops $N i d->(1:idxlens[d]) d->(@inbounds j_d = Base.unsafe_getindex(I_d, i_d)) begin
                 @inbounds (Base.Cartesian.@nref $N V j) = x
             end
         else
             X = x
-            Base.Cartesian.@ncall $N Base.setindex_shape_check X I
+            setindex_shape_check(X, idxlens...)
             k = 1
-            Base.Cartesian.@nloops $N i d->(1:length(I_d)) d->(@inbounds j_d = Base.unsafe_getindex(I_d, i_d)) begin
+            Base.Cartesian.@nloops $N i d->(1:idxlens[d]) d->(@inbounds j_d = Base.unsafe_getindex(I_d, i_d)) begin
                 @inbounds (Base.Cartesian.@nref $N V j) = X[k]
                 k += 1
             end
@@ -375,6 +383,25 @@ stagedfunction merge_indexes(V, indexes::NTuple, dims::Dims, linindex::UnitRange
             if in(counter_0, linindex)
                 index[k+=1] = offset_0
             end
+        end
+        index
+    end
+end
+# Even simpler is the case where the linear index is ::Colon: return all indexes
+stagedfunction merge_indexes(V, indexes::NTuple, dims::Dims, ::Colon)
+    N = length(indexes)
+    N > 0 || throw(ArgumentError("cannot merge empty indexes"))
+    quote
+        Base.Cartesian.@nexprs $N d->(I_d = indexes[d])
+        dimoffset = ndims(V.parent) - length(dims)
+        n = prod(map(length, indexes))
+        Pstride_1 = 1   # parent strides
+        Base.Cartesian.@nexprs $(N-1) d->(Pstride_{d+1} = Pstride_d*dims[d])
+        Base.Cartesian.@nexprs $N d->(offset_d = 1)  # offset_0 is a linear index into parent
+        k = 0
+        index = Array(Int, n)
+        Base.Cartesian.@nloops $N i d->(1:dimsize(V, d+dimoffset, I_d)) d->(offset_{d-1} = offset_d + (I_d[i_d]-1)*Pstride_d) begin
+            index[k+=1] = offset_0
         end
         index
     end
@@ -541,20 +568,27 @@ function getindex(B::BitArray, I0::UnitRange{Int})
     return unsafe_getindex(B, I0)
 end
 
+function getindex(B::BitArray, ::Colon)
+    X = BitArray(0)
+    X.chunks = copy(B.chunks)
+    X.len = length(B)
+    return X
+end
+
 getindex{T<:Real}(B::BitArray, I0::UnitRange{T}) = getindex(B, to_index(I0))
 
-stagedfunction unsafe_getindex(B::BitArray, I0::UnitRange{Int}, I::Union(Int,UnitRange{Int})...)
+stagedfunction unsafe_getindex(B::BitArray, I0::Union(Colon,UnitRange{Int}), I::Union(Int,UnitRange{Int},Colon)...)
     N = length(I)
     Isplat = Expr[:(I[$d]) for d = 1:N]
     quote
         @nexprs $N d->(I_d = I[d])
-        X = BitArray(index_shape(I0, $(Isplat...)))
+        X = BitArray(index_shape(B, I0, $(Isplat...)))
 
         f0 = first(I0)
-        l0 = length(I0)
+        l0 = size(X, 1)
 
         gap_lst_1 = 0
-        @nexprs $N d->(gap_lst_{d+1} = length(I_d))
+        @nexprs $N d->(gap_lst_{d+1} = size(X, d+1))
         stride = 1
         ind = f0
         @nexprs $N d->begin
@@ -578,20 +612,21 @@ end
 
 # general multidimensional non-scalar indexing
 
-stagedfunction unsafe_getindex(B::BitArray, I::Union(Int,AbstractVector{Int})...)
+stagedfunction unsafe_getindex(B::BitArray, I::Union(Int,AbstractVector{Int},Colon)...)
     N = length(I)
     Isplat = Expr[:(I[$d]) for d = 1:N]
     quote
         @nexprs $N d->(I_d = I[d])
-        X = BitArray(index_shape($(Isplat...)))
+        shape = @ncall $N index_shape B I
+        X = BitArray(shape)
         Xc = X.chunks
 
         stride_1 = 1
         @nexprs $N d->(stride_{d+1} = stride_d * size(B, d))
         @nexprs 1 d->(offset_{$N} = 1)
         ind = 1
-        @nloops($N, i, d->I_d,
-                d->(offset_{d-1} = offset_d + (i_d-1)*stride_d), # PRE
+        @nloops($N, i, X, d->(@inbounds j_d = unsafe_getindex(I[d], i_d);
+                              offset_{d-1} = offset_d + (j_d-1)*stride_d), # PRE
                 begin
                     unsafe_bitsetindex!(Xc, B[offset_0], ind)
                     ind += 1
@@ -602,7 +637,7 @@ end
 
 # general version with Real (or logical) indexing which dispatches on the appropriate method
 
-stagedfunction getindex(B::BitArray, I::Union(Real,AbstractVector)...)
+stagedfunction getindex(B::BitArray, I::Union(Real,AbstractVector,Colon)...)
     N = length(I)
     Isplat = Expr[:(I[$d]) for d = 1:N]
     Jsplat = Expr[:(to_index(I[$d])) for d = 1:N]
@@ -732,25 +767,27 @@ end
 
 # general multidimensional non-scalar indexing
 
-stagedfunction unsafe_setindex!(B::BitArray, X::AbstractArray, I::Union(Int,AbstractArray{Int})...)
+stagedfunction unsafe_setindex!(B::BitArray, X::AbstractArray, I::Union(Int,AbstractArray{Int},Colon)...)
     N = length(I)
     quote
         refind = 1
         @nexprs $N d->(I_d = I[d])
-        @nloops $N i d->I_d @inbounds begin
-            @ncall $N unsafe_setindex! B convert(Bool,X[refind]) i
+        idxlens = @ncall $N index_lengths B I
+        @nloops $N i d->(1:idxlens[d]) d->(J_d = I_d[i_d]) @inbounds begin
+            @ncall $N unsafe_setindex! B convert(Bool,X[refind]) J
             refind += 1
         end
         return B
     end
 end
 
-stagedfunction unsafe_setindex!(B::BitArray, x::Bool, I::Union(Int,AbstractArray{Int})...)
+stagedfunction unsafe_setindex!(B::BitArray, x::Bool, I::Union(Int,AbstractArray{Int},Colon)...)
     N = length(I)
     quote
         @nexprs $N d->(I_d = I[d])
-        @nloops $N i d->I_d begin
-            @ncall $N unsafe_setindex! B x i
+        idxlens = @ncall $N index_lengths B I
+        @nloops $N i d->(1:idxlens[d]) d->(J_d = I_d[i_d]) begin
+            @ncall $N unsafe_setindex! B x J
         end
         return B
     end
@@ -764,7 +801,7 @@ function setindex!(B::BitArray, x, i::Real)
     return unsafe_setindex!(B, convert(Bool,x), to_index(i))
 end
 
-stagedfunction setindex!(B::BitArray, x, I::Union(Real,AbstractArray)...)
+stagedfunction setindex!(B::BitArray, x, I::Union(Real,AbstractArray,Colon)...)
     N = length(I)
     quote
         checkbounds(B, I...)
@@ -779,16 +816,17 @@ end
 function setindex!(B::BitArray, X::AbstractArray, i::Real)
     checkbounds(B, i)
     j = to_index(i)
-    setindex_shape_check(X, j)
+    setindex_shape_check(X, index_lengths(A, j)[1])
     return unsafe_setindex!(B, X, j)
 end
 
-stagedfunction setindex!(B::BitArray, X::AbstractArray, I::Union(Real,AbstractArray)...)
+stagedfunction setindex!(B::BitArray, X::AbstractArray, I::Union(Real,AbstractArray,Colon)...)
     N = length(I)
     quote
         checkbounds(B, I...)
         @nexprs $N d->(J_d = to_index(I[d]))
-        @ncall $N setindex_shape_check X J
+        idxlens = @ncall $N index_lengths B J
+        setindex_shape_check(X, idxlens...)
         return @ncall $N unsafe_setindex! B X J
     end
 end
