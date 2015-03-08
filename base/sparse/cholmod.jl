@@ -617,7 +617,7 @@ for Ti in IndexTypes
             d
         end
 
-        function solve{Tv<:VTypes}(sys::Integer, F::Factor{Tv,$Ti}, B::Sparse{Tv,$Ti})
+        function spsolve{Tv<:VTypes}(sys::Integer, F::Factor{Tv,$Ti}, B::Sparse{Tv,$Ti})
             if size(F,1) != size(B,1)
                 throw(DimensionMismatch("LHS and RHS should have the same number of rows. LHS has $(size(F,1)) rows, but RHS has $(size(B,1)) rows."))
             end
@@ -1188,39 +1188,43 @@ update!{T<:VTypes}(F::Factor{T}, A::SparseMatrixCSC{T}, β::Number) = update!(F,
 
 ## Solvers
 
-# Solve Lx = b and L'x=b where A = L*L'
-function (\){T,Ti}(L::FactorComponent{T,Ti,:L}, B::Union(Dense,Sparse))
-    solve(CHOLMOD_L, Factor(L), B)
-end
-function (\){T,Ti}(L::FactorComponent{T,Ti,:U}, B::Union(Dense,Sparse))
-    solve(CHOLMOD_Lt, Factor(L), B)
-end
-# Solve PLx = b and L'P'x=b where A = P*L*L'*P'
-function (\){T,Ti}(L::FactorComponent{T,Ti,:PtL}, B::Union(Dense,Sparse))
-    F = Factor(L)
-    solve(CHOLMOD_L, F, solve(CHOLMOD_P, F, B))  # Confusingly, CHOLMOD_P solves P'x = b
-end
-function (\){T,Ti}(L::FactorComponent{T,Ti,:UP}, B::Union(Dense,Sparse))
-    F = Factor(L)
-    solve(CHOLMOD_Pt, F, solve(CHOLMOD_Lt, F, B))
-end
-# Solve various equations for A = L*D*L' and A = P*L*D*L'*P'
-function (\){T,Ti}(L::FactorComponent{T,Ti,:D}, B::Union(Dense,Sparse))
-    solve(CHOLMOD_D, Factor(L), B)
-end
-function (\){T,Ti}(L::FactorComponent{T,Ti,:LD}, B::Union(Dense,Sparse))
-    solve(CHOLMOD_LD, Factor(L), B)
-end
-function (\){T,Ti}(L::FactorComponent{T,Ti,:DU}, B::Union(Dense,Sparse))
-    solve(CHOLMOD_DLt, Factor(L), B)
-end
-function (\){T,Ti}(L::FactorComponent{T,Ti,:PtLD}, B::Union(Dense,Sparse))
-    F = Factor(L)
-    solve(CHOLMOD_LD, F, solve(CHOLMOD_P, F, B))
-end
-function (\){T,Ti}(L::FactorComponent{T,Ti,:DUP}, B::Union(Dense,Sparse))
-    F = Factor(L)
-    solve(CHOLMOD_Pt, F, solve(CHOLMOD_DLt, F, B))
+for (T, f) in ((:Dense, :solve), (:Sparse, :spsolve))
+    @eval begin
+        # Solve Lx = b and L'x=b where A = L*L'
+        function (\){T,Ti}(L::FactorComponent{T,Ti,:L}, B::$T)
+            ($f)(CHOLMOD_L, Factor(L), B)
+        end
+        function (\){T,Ti}(L::FactorComponent{T,Ti,:U}, B::$T)
+            ($f)(CHOLMOD_Lt, Factor(L), B)
+        end
+        # Solve PLx = b and L'P'x=b where A = P*L*L'*P'
+        function (\){T,Ti}(L::FactorComponent{T,Ti,:PtL}, B::$T)
+            F = Factor(L)
+            ($f)(CHOLMOD_L, F, ($f)(CHOLMOD_P, F, B))  # Confusingly, CHOLMOD_P solves P'x = b
+        end
+        function (\){T,Ti}(L::FactorComponent{T,Ti,:UP}, B::$T)
+            F = Factor(L)
+            ($f)(CHOLMOD_Pt, F, ($f)(CHOLMOD_Lt, F, B))
+        end
+        # Solve various equations for A = L*D*L' and A = P*L*D*L'*P'
+        function (\){T,Ti}(L::FactorComponent{T,Ti,:D}, B::$T)
+            ($f)(CHOLMOD_D, Factor(L), B)
+        end
+        function (\){T,Ti}(L::FactorComponent{T,Ti,:LD}, B::$T)
+            ($f)(CHOLMOD_LD, Factor(L), B)
+        end
+        function (\){T,Ti}(L::FactorComponent{T,Ti,:DU}, B::$T)
+            ($f)(CHOLMOD_DLt, Factor(L), B)
+        end
+        function (\){T,Ti}(L::FactorComponent{T,Ti,:PtLD}, B::$T)
+            F = Factor(L)
+            ($f)(CHOLMOD_LD, F, ($f)(CHOLMOD_P, F, B))
+        end
+        function (\){T,Ti}(L::FactorComponent{T,Ti,:DUP}, B::$T)
+            F = Factor(L)
+            ($f)(CHOLMOD_Pt, F, ($f)(CHOLMOD_DLt, F, B))
+        end
+    end
 end
 
 function (\)(L::FactorComponent, b::Vector)
@@ -1238,13 +1242,13 @@ Ac_ldiv_B(L::FactorComponent, B) = ctranspose(L)\B
 (\)(L::Factor, B::Dense) = solve(CHOLMOD_A, L, B)
 (\)(L::Factor, b::Vector) = reshape(convert(Matrix, solve(CHOLMOD_A, L, Dense(b))), length(b))
 (\)(L::Factor, B::Matrix) = convert(Matrix, solve(CHOLMOD_A, L, Dense(B)))
-(\)(L::Factor, B::Sparse) = solve(CHOLMOD_A, L, B)
+(\)(L::Factor, B::Sparse) = spsolve(CHOLMOD_A, L, B)
 # When right hand side is sparse, we have to ensure that the rhs is not marked as symmetric.
-(\)(L::Factor, B::SparseMatrixCSC) = sparse(solve(CHOLMOD_A, L, Sparse(B, 0)))
+(\)(L::Factor, B::SparseMatrixCSC) = sparse(spsolve(CHOLMOD_A, L, Sparse(B, 0)))
 
 Ac_ldiv_B(L::Factor, B::Dense) = solve(CHOLMOD_A, L, B)
 Ac_ldiv_B(L::Factor, B::VecOrMat) = convert(Matrix, solve(CHOLMOD_A, L, Dense(B)))
-Ac_ldiv_B(L::Factor, B::Sparse) = solve(CHOLMOD_A, L, B)
+Ac_ldiv_B(L::Factor, B::Sparse) = spsolve(CHOLMOD_A, L, B)
 Ac_ldiv_B(L::Factor, B::SparseMatrixCSC) = Ac_ldiv_B(L, Sparse(B))
 
 ## Other convenience methods
