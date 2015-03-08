@@ -476,44 +476,49 @@ Fs = cholfact(As, [1:3;])
 @test_approx_eq sparse(Fs[:L]) Lf
 @test_approx_eq sparse(Fs) As
 b = rand(3)
-@test_approx_eq Fs\b As\b
+@test_approx_eq Fs\b Af\b
+@test_approx_eq Fs[:UP]\(Fs[:PtL]\b) Af\b
 @test_approx_eq Fs[:L]\b Lf\b
 @test_approx_eq Fs[:U]\b Lf'\b
 @test_approx_eq Fs[:L]'\b Lf'\b
 @test_approx_eq Fs[:U]'\b Lf\b
-@test_approx_eq Fs[:PL]\b Lf\b
-@test_approx_eq Fs[:UPt]\b Lf'\b
-@test_approx_eq Fs[:PL]'\b Lf'\b
-@test_approx_eq Fs[:UPt]'\b Lf\b
-@test_throws MethodError Fs[:D]
-@test_throws MethodError Fs[:LD]
-@test_throws MethodError Fs[:DU]
-@test_throws MethodError Fs[:PLD]
-@test_throws MethodError Fs[:DUPt]
+@test_approx_eq Fs[:PtL]\b Lf\b
+@test_approx_eq Fs[:UP]\b Lf'\b
+@test_approx_eq Fs[:PtL]'\b Lf'\b
+@test_approx_eq Fs[:UP]'\b Lf\b
+@test_throws CHOLMOD.CHOLMODException Fs[:D]
+@test_throws CHOLMOD.CHOLMODException Fs[:LD]
+@test_throws CHOLMOD.CHOLMODException Fs[:DU]
+@test_throws CHOLMOD.CHOLMODException Fs[:PLD]
+@test_throws CHOLMOD.CHOLMODException Fs[:DUPt]
 
 # cholfact, with permutation
-p = [2,1,3]
+p = [2,3,1]
+pinv = [3,1,2]
 Fs = cholfact(As, p)
 @test Fs[:p] == p
-Asp = Af[p,p]
-Lfp = cholfact(Asp)[:L]
+Afp = Af[p,p]
+Lfp = cholfact(Afp)[:L]
 @test_approx_eq sparse(Fs[:L]) Lfp
 @test_approx_eq sparse(Fs) As
 b = rand(3)
-@test_approx_eq Fs\b As\b
-@test_approx_eq Fs[:L]\b[p] Lfp\b[p]
-@test_approx_eq Fs[:U]\b[p] Lfp'\b[p]
-@test_approx_eq Fs[:L]'\b[p] Lfp'\b[p]
-@test_approx_eq Fs[:U]'\b[p] Lfp\b[p]
-@test_approx_eq Fs[:PL]\b Lfp\b[p]
-@test_approx_eq Fs[:UPt]\b (Lfp'\b)[p]
-@test_approx_eq Fs[:PL]'\b (Lfp'\b)[p]
-@test_approx_eq Fs[:UPt]'\b Lfp\b[p]
-@test_throws MethodError Fs[:D]
-@test_throws MethodError Fs[:LD]
-@test_throws MethodError Fs[:DU]
-@test_throws MethodError Fs[:PLD]
-@test_throws MethodError Fs[:DUPt]
+@test_approx_eq Fs\b Af\b
+@test_approx_eq Fs[:UP]\(Fs[:PtL]\b) Af\b
+@test_approx_eq Fs[:L]\b Lfp\b
+@test_approx_eq Fs[:U]'\b Lfp\b
+@test_approx_eq Fs[:U]\b Lfp'\b
+@test_approx_eq Fs[:L]'\b Lfp'\b
+@test_approx_eq Fs[:PtL]\b Lfp\b[p]
+@test_approx_eq Fs[:UP]\b (Lfp'\b)[pinv]
+@test_approx_eq Fs[:PtL]'\b (Lfp'\b)[pinv]
+@test_approx_eq Fs[:UP]'\b Lfp\b[p]
+@test_throws CHOLMOD.CHOLMODException Fs[:PL]
+@test_throws CHOLMOD.CHOLMODException Fs[:UPt]
+@test_throws CHOLMOD.CHOLMODException Fs[:D]
+@test_throws CHOLMOD.CHOLMODException Fs[:LD]
+@test_throws CHOLMOD.CHOLMODException Fs[:DU]
+@test_throws CHOLMOD.CHOLMODException Fs[:PLD]
+@test_throws CHOLMOD.CHOLMODException Fs[:DUPt]
 
 # ldltfact, no permutation
 Fs = ldltfact(As, [1:3;])
@@ -521,50 +526,56 @@ Fs = ldltfact(As, [1:3;])
 @test_approx_eq sparse(Fs[:LD]) LDf
 @test_approx_eq sparse(Fs) As
 b = rand(3)
-@test_approx_eq Fs\b As\b
+@test_approx_eq Fs\b Af\b
+@test_approx_eq Fs[:UP]\(Fs[:PtLD]\b) Af\b
+@test_approx_eq Fs[:DUP]\(Fs[:PtL]\b) Af\b
 @test_approx_eq Fs[:L]\b L_f\b
 @test_approx_eq Fs[:U]\b L_f'\b
 @test_approx_eq Fs[:L]'\b L_f'\b
 @test_approx_eq Fs[:U]'\b L_f\b
-@test_approx_eq Fs[:PL]\b L_f\b
-@test_approx_eq Fs[:UPt]\b L_f'\b
-@test_approx_eq Fs[:PL]'\b L_f'\b
-@test_approx_eq Fs[:UPt]'\b L_f\b
+@test_approx_eq Fs[:PtL]\b L_f\b
+@test_approx_eq Fs[:UP]\b L_f'\b
+@test_approx_eq Fs[:PtL]'\b L_f'\b
+@test_approx_eq Fs[:UP]'\b L_f\b
 @test_approx_eq Fs[:D]\b D_f\b
 @test_approx_eq Fs[:D]'\b D_f\b
 @test_approx_eq Fs[:LD]\b D_f\(L_f\b)
 @test_approx_eq Fs[:DU]'\b D_f\(L_f\b)
 @test_approx_eq Fs[:LD]'\b L_f'\(D_f\b)
 @test_approx_eq Fs[:DU]\b L_f'\(D_f\b)
-@test_approx_eq Fs[:PLD]\b D_f\(L_f\b)
-@test_approx_eq Fs[:DUPt]'\b D_f\(L_f\b)
-@test_approx_eq Fs[:PLD]'\b L_f'\(D_f\b)
-@test_approx_eq Fs[:DUPt]\b L_f'\(D_f\b)
+@test_approx_eq Fs[:PtLD]\b D_f\(L_f\b)
+@test_approx_eq Fs[:DUP]'\b D_f\(L_f\b)
+@test_approx_eq Fs[:PtLD]'\b L_f'\(D_f\b)
+@test_approx_eq Fs[:DUP]\b L_f'\(D_f\b)
 
 # ldltfact, with permutation
-p = [2,1,3]
 Fs = ldltfact(As, p)
 @test Fs[:p] == p
 @test_approx_eq sparse(Fs) As
 b = rand(3)
 Asp = As[p,p]
-LDp = sparse(ldltfact(Asp)[:LD])
+LDp = sparse(ldltfact(Asp, [1,2,3])[:LD])
+# LDp = sparse(Fs[:LD])
 Lp, dp = Base.SparseMatrix.CHOLMOD.getLd!(copy(LDp))
 Dp = spdiagm(dp)
-@test_approx_eq Fs\b As\b
-@test_approx_eq Fs[:L]\b[p] Lp\b[p]
-@test_approx_eq Fs[:U]\b[p] Lp'\b[p]
-@test_approx_eq Fs[:L]'\b[p] Lp'\b[p]
-@test_approx_eq Fs[:U]'\b[p] Lp\b[p]
-@test_approx_eq Fs[:PL]\b Lp\b[p]
-@test_approx_eq Fs[:UPt]\b (Lp'\b)[p]
-@test_approx_eq Fs[:PL]'\b (Lp'\b)[p]
-@test_approx_eq Fs[:UPt]'\b Lp\b[p]
-@test_approx_eq Fs[:LD]\b[p] Dp\(Lp\b[p])
-@test_approx_eq Fs[:DU]'\b[p] Dp\(Lp\b[p])
-@test_approx_eq Fs[:LD]'\b[p] Lp'\(Dp\b[p])
-@test_approx_eq Fs[:DU]\b[p] Lp'\(Dp\b[p])
-@test_approx_eq Fs[:PLD]\b Dp\(Lp\b[p])
-@test_approx_eq Fs[:DUPt]'\b Dp\(Lp\b[p])
-@test_approx_eq Fs[:PLD]'\b (Lp'\(Dp\b))[p]
-@test_approx_eq Fs[:DUPt]\b (Lp'\(Dp\b))[p]
+@test_approx_eq Fs\b Af\b
+@test_approx_eq Fs[:UP]\(Fs[:PtLD]\b) Af\b
+@test_approx_eq Fs[:DUP]\(Fs[:PtL]\b) Af\b
+@test_approx_eq Fs[:L]\b Lp\b
+@test_approx_eq Fs[:U]\b Lp'\b
+@test_approx_eq Fs[:L]'\b Lp'\b
+@test_approx_eq Fs[:U]'\b Lp\b
+@test_approx_eq Fs[:PtL]\b Lp\b[p]
+@test_approx_eq Fs[:UP]\b (Lp'\b)[pinv]
+@test_approx_eq Fs[:PtL]'\b (Lp'\b)[pinv]
+@test_approx_eq Fs[:UP]'\b Lp\b[p]
+@test_approx_eq Fs[:LD]\b Dp\(Lp\b)
+@test_approx_eq Fs[:DU]'\b Dp\(Lp\b)
+@test_approx_eq Fs[:LD]'\b Lp'\(Dp\b)
+@test_approx_eq Fs[:DU]\b Lp'\(Dp\b)
+@test_approx_eq Fs[:PtLD]\b Dp\(Lp\b[p])
+@test_approx_eq Fs[:DUP]'\b Dp\(Lp\b[p])
+@test_approx_eq Fs[:PtLD]'\b (Lp'\(Dp\b))[pinv]
+@test_approx_eq Fs[:DUP]\b (Lp'\(Dp\b))[pinv]
+@test_throws CHOLMOD.CHOLMODException Fs[:DUPt]
+@test_throws CHOLMOD.CHOLMODException Fs[:PLD]

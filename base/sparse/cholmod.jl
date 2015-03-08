@@ -202,11 +202,11 @@ type FactorComponent{Tv,Ti,S} <: AbstractMatrix{Tv}
     function FactorComponent(F::Factor{Tv,Ti})
         s = unsafe_load(F.p)
         if bool(s.is_ll)
-            S == :L || S == :U || S == :PL || S == :UPt || throw(CHOLMODException(S, " not supported for sparse LLt matrices; try :L, :U, :PL, or :UPt"))
+            S == :L || S == :U || S == :PtL || S == :UP || throw(CHOLMODException(string(S, " not supported for sparse LLt matrices; try :L, :U, :PtL, or :UP")))
         else
-            S == :L || S == :U || S == :PL || S == :UPt ||
-            S == :D || S == :LD || S == :DU || S == :PLD || S == :DUPt ||
-            throw(CHOLMODException(S, " not supported for sparse LDLt matrices; try :L, :U, :PL, :UPt, :D, :LD, :DU, :PLD, or :DUPt"))
+            S == :L || S == :U || S == :PtL || S == :UP ||
+            S == :D || S == :LD || S == :DU || S == :PtLD || S == :DUP ||
+            throw(CHOLMODException(string(S, " not supported for sparse LDLt matrices; try :L, :U, :PtL, :UP, :D, :LD, :DU, :PtLD, or :DUP")))
         end
         new(F)
     end
@@ -850,7 +850,11 @@ function sparse(F::Factor)
     end
     p = get_perm(F)
     if p != [1:s.n;]
-        A = A[p,p]
+        pinv = Array(Int, length(p))
+        for k = 1:length(p)
+            pinv[p[k]] = k
+        end
+        A = A[pinv,pinv]
     end
     A
 end
@@ -886,13 +890,24 @@ eltype{T<:VTypes}(A::Factor{T}) = T
 eltype{T<:VTypes}(A::Sparse{T}) = T
 
 function show(io::IO, F::Factor)
-    s = unsafe_load(F.p)
     println(io, typeof(F))
+    showfactor(io, F)
+end
+
+function show(io::IO, FC::FactorComponent)
+    println(io, typeof(FC))
+    showfactor(io, Factor(FC))
+end
+
+function showfactor(io::IO, F::Factor)
+    s = unsafe_load(F.p)
     @printf(io, "type: %12s\n", bool(s.is_ll) ? "LLt" : "LDLt")
     @printf(io, "method: %10s\n", bool(s.is_super) ? "supernodal" : "simplicial")
     @printf(io, "maxnnz: %10d\n", int(s.nzmax))
     @printf(io, "nnz: %13d\n", nnz(Sparse(F)))
 end
+
+
 
 isvalid(A::Dense) = check_dense(A)
 isvalid(A::Sparse) = check_sparse(A)
@@ -922,13 +937,13 @@ size(FC::FactorComponent) = size(FC.F)
 
 ctranspose{Tv,Ti}(FC::FactorComponent{Tv,Ti,:L}) = FactorComponent{Tv,Ti,:U}(FC.F)
 ctranspose{Tv,Ti}(FC::FactorComponent{Tv,Ti,:U}) = FactorComponent{Tv,Ti,:L}(FC.F)
-ctranspose{Tv,Ti}(FC::FactorComponent{Tv,Ti,:PL}) = FactorComponent{Tv,Ti,:UPt}(FC.F)
-ctranspose{Tv,Ti}(FC::FactorComponent{Tv,Ti,:UPt}) = FactorComponent{Tv,Ti,:PL}(FC.F)
+ctranspose{Tv,Ti}(FC::FactorComponent{Tv,Ti,:PtL}) = FactorComponent{Tv,Ti,:UP}(FC.F)
+ctranspose{Tv,Ti}(FC::FactorComponent{Tv,Ti,:UP}) = FactorComponent{Tv,Ti,:PtL}(FC.F)
 ctranspose{Tv,Ti}(FC::FactorComponent{Tv,Ti,:D}) = FC
 ctranspose{Tv,Ti}(FC::FactorComponent{Tv,Ti,:LD}) = FactorComponent{Tv,Ti,:DU}(FC.F)
 ctranspose{Tv,Ti}(FC::FactorComponent{Tv,Ti,:DU}) = FactorComponent{Tv,Ti,:LD}(FC.F)
-ctranspose{Tv,Ti}(FC::FactorComponent{Tv,Ti,:PLD}) = FactorComponent{Tv,Ti,:DUPt}(FC.F)
-ctranspose{Tv,Ti}(FC::FactorComponent{Tv,Ti,:DUPt}) = FactorComponent{Tv,Ti,:PLD}(FC.F)
+ctranspose{Tv,Ti}(FC::FactorComponent{Tv,Ti,:PtLD}) = FactorComponent{Tv,Ti,:DUP}(FC.F)
+ctranspose{Tv,Ti}(FC::FactorComponent{Tv,Ti,:DUP}) = FactorComponent{Tv,Ti,:PtLD}(FC.F)
 
 function getindex(A::Dense, i::Integer)
     s = unsafe_load(A.p)
@@ -1181,13 +1196,13 @@ function (\){T,Ti}(L::FactorComponent{T,Ti,:U}, B::Union(Dense,Sparse))
     solve(CHOLMOD_Lt, Factor(L), B)
 end
 # Solve PLx = b and L'P'x=b where A = P*L*L'*P'
-function (\){T,Ti}(L::FactorComponent{T,Ti,:PL}, B::Union(Dense,Sparse))
+function (\){T,Ti}(L::FactorComponent{T,Ti,:PtL}, B::Union(Dense,Sparse))
     F = Factor(L)
-    solve(CHOLMOD_L, F, solve(CHOLMOD_Pt, F, B))  # Confusingly, CHOLMOD_Pt solves Px = b
+    solve(CHOLMOD_L, F, solve(CHOLMOD_P, F, B))  # Confusingly, CHOLMOD_P solves P'x = b
 end
-function (\){T,Ti}(L::FactorComponent{T,Ti,:UPt}, B::Union(Dense,Sparse))
+function (\){T,Ti}(L::FactorComponent{T,Ti,:UP}, B::Union(Dense,Sparse))
     F = Factor(L)
-    solve(CHOLMOD_P, F, solve(CHOLMOD_Lt, F, B))
+    solve(CHOLMOD_Pt, F, solve(CHOLMOD_Lt, F, B))
 end
 # Solve various equations for A = L*D*L' and A = P*L*D*L'*P'
 function (\){T,Ti}(L::FactorComponent{T,Ti,:D}, B::Union(Dense,Sparse))
@@ -1199,13 +1214,13 @@ end
 function (\){T,Ti}(L::FactorComponent{T,Ti,:DU}, B::Union(Dense,Sparse))
     solve(CHOLMOD_DLt, Factor(L), B)
 end
-function (\){T,Ti}(L::FactorComponent{T,Ti,:PLD}, B::Union(Dense,Sparse))
+function (\){T,Ti}(L::FactorComponent{T,Ti,:PtLD}, B::Union(Dense,Sparse))
     F = Factor(L)
-    solve(CHOLMOD_LD, F, solve(CHOLMOD_Pt, F, B))
+    solve(CHOLMOD_LD, F, solve(CHOLMOD_P, F, B))
 end
-function (\){T,Ti}(L::FactorComponent{T,Ti,:DUPt}, B::Union(Dense,Sparse))
+function (\){T,Ti}(L::FactorComponent{T,Ti,:DUP}, B::Union(Dense,Sparse))
     F = Factor(L)
-    solve(CHOLMOD_P, F, solve(CHOLMOD_DLt, F, B))
+    solve(CHOLMOD_Pt, F, solve(CHOLMOD_DLt, F, B))
 end
 
 function (\)(L::FactorComponent, b::Vector)
