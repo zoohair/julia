@@ -494,7 +494,7 @@ b = rand(3)
 
 # cholfact, with permutation
 p = [2,3,1]
-pinv = [3,1,2]
+p_inv = [3,1,2]
 Fs = cholfact(As, p)
 @test Fs[:p] == p
 Afp = Af[p,p]
@@ -509,8 +509,8 @@ b = rand(3)
 @test_approx_eq Fs[:U]\b Lfp'\b
 @test_approx_eq Fs[:L]'\b Lfp'\b
 @test_approx_eq Fs[:PtL]\b Lfp\b[p]
-@test_approx_eq Fs[:UP]\b (Lfp'\b)[pinv]
-@test_approx_eq Fs[:PtL]'\b (Lfp'\b)[pinv]
+@test_approx_eq Fs[:UP]\b (Lfp'\b)[p_inv]
+@test_approx_eq Fs[:PtL]'\b (Lfp'\b)[p_inv]
 @test_approx_eq Fs[:UP]'\b Lfp\b[p]
 @test_throws CHOLMOD.CHOLMODException Fs[:PL]
 @test_throws CHOLMOD.CHOLMODException Fs[:UPt]
@@ -566,8 +566,8 @@ Dp = spdiagm(dp)
 @test_approx_eq Fs[:L]'\b Lp'\b
 @test_approx_eq Fs[:U]'\b Lp\b
 @test_approx_eq Fs[:PtL]\b Lp\b[p]
-@test_approx_eq Fs[:UP]\b (Lp'\b)[pinv]
-@test_approx_eq Fs[:PtL]'\b (Lp'\b)[pinv]
+@test_approx_eq Fs[:UP]\b (Lp'\b)[p_inv]
+@test_approx_eq Fs[:PtL]'\b (Lp'\b)[p_inv]
 @test_approx_eq Fs[:UP]'\b Lp\b[p]
 @test_approx_eq Fs[:LD]\b Dp\(Lp\b)
 @test_approx_eq Fs[:DU]'\b Dp\(Lp\b)
@@ -575,7 +575,7 @@ Dp = spdiagm(dp)
 @test_approx_eq Fs[:DU]\b Lp'\(Dp\b)
 @test_approx_eq Fs[:PtLD]\b Dp\(Lp\b[p])
 @test_approx_eq Fs[:DUP]'\b Dp\(Lp\b[p])
-@test_approx_eq Fs[:PtLD]'\b (Lp'\(Dp\b))[pinv]
-@test_approx_eq Fs[:DUP]\b (Lp'\(Dp\b))[pinv]
+@test_approx_eq Fs[:PtLD]'\b (Lp'\(Dp\b))[p_inv]
+@test_approx_eq Fs[:DUP]\b (Lp'\(Dp\b))[p_inv]
 @test_throws CHOLMOD.CHOLMODException Fs[:DUPt]
 @test_throws CHOLMOD.CHOLMODException Fs[:PLD]
