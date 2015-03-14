@@ -168,9 +168,7 @@ function index_generate(NP, Itypes, Vsym, Isyms)
     exhead, :($Vsym.parent[$(indexexprs...)])
 end
 
-unsafe_getindex(v::Real, ind::Int) = v
-unsafe_getindex(v::Range, ind::Int) = first(v) + (ind-1)*step(v)
-@inline unsafe_getindex(v::Array, ind::Int) = (@inbounds x = v[ind]; x)
-unsafe_getindex(v::AbstractArray, ind::Int) = v[ind]
-unsafe_getindex(v::Colon, ind::Int) = ind
-unsafe_getindex(v, ind::Real) = unsafe_getindex(v, to_index(ind))
+unsafe_getindex(v::Real, ind::Real) = v
+unsafe_getindex(v::Range, ind::Real) = first(v) + (to_index(ind)-1)*step(v)
+@inline unsafe_getindex(v::Array, ind::Real) = (@inbounds x = v[to_index(ind)]; x)
+unsafe_getindex(v::Colon, ind::Real) = to_index(ind)

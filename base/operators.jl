@@ -234,6 +234,8 @@ index_lengths_dim(A, dim, i, I...)       = tuple(length(i), index_lengths_dim(A,
 
 # shape of array to create for getindex() with indexes I
 # drop dimensions indexed with trailing scalars
+index_shape(A::AbstractArray, I::AbstractArray) = size(I) # Linear index reshape
+index_shape(A::AbstractArray, I::AbstractArray{Bool}) = (sum(I),) # Logical index
 index_shape(A::AbstractArray, I...) = index_shape_dim(A, 1, I...)
 index_shape_dim(A, dim, I::Real...)    = ()
 index_shape_dim(A, dim, ::Colon)       = dim == 1 ? (length(A),) : (trailingsize(A, dim),)

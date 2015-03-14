@@ -55,9 +55,6 @@ stagedfunction setindex!{T,N}(A::Array{T}, v, index::CartesianIndex{N})
     N==0 ? :(Base.arrayset(A, convert($T,v), 1)) : :(@ncall $N Base.arrayset A convert($T,v) d->index[d])
 end
 
-stagedfunction getindex{N}(A::AbstractArray, index::CartesianIndex{N})
-    :(@nref $N A d->index[d])
-end
 stagedfunction setindex!{N}(A::AbstractArray, v, index::CartesianIndex{N})
     :((@nref $N A d->index[d]) = v)
 end
@@ -178,19 +175,123 @@ end  # IteratorsMD
 
 using .IteratorsMD
 
+### From abstractarray.jl: Internal multidimensional indexing definitions ###
+# These are not defined on directly ongetindex and unsafe_getindex to avoid
+# ambiguities for AbstractArray subtypes. See the note in abstractarray.jl
 
-### From array.jl
-
-stagedfunction checksize(A::AbstractArray, I...)
-    N = length(I)
-    ex = Expr(:block)
-    push!(ex.args, :(idxlens = index_lengths(A, I...)))
-    for d=1:N
-        push!(ex.args, :(size(A, $d) == idxlens[$d] || throw(DimensionMismatch("index ", $d, " has length ", idxlens[$d], ", but size(A, ", $d, ") = ", size(A,$d)))))
+# Note that it's most efficient to call checkbounds first, and then to_index
+stagedfunction _getindex(l::LinearIndexing, A::AbstractArray, I::Union(Real, AbstractArray, Colon)...)
+    Isplat = Expr[:(I[$d]) for d = 1:length(I)]
+    quote
+        $(Expr(:meta, :inline))
+        checkbounds(A, $(Isplat...))
+        unsafe_getindex(A, $(Isplat...))
     end
-    push!(ex.args, :(nothing))
-    ex
 end
+stagedfunction _unsafe_getindex(l::LinearIndexing, A::AbstractArray, I::Union(Real, AbstractArray, Colon)...)
+    N = length(I)
+    quote
+        $(Expr(:meta, :inline))
+        @nexprs $N d->(I_d = to_index(I[d]))
+        dest = similar(A, @ncall $N index_shape A I)
+        @ncall $N checksize dest I
+        @ncall $N _unsafe_getindex! linearindexing(dest) dest l A I
+    end
+end
+
+# logical indexing optimization - don't use find (within to_index)
+# Todo: use magic to speed up LinearSlow src
+@inline function _unsafe_getindex(::LinearIndexing, src::AbstractArray, I::AbstractArray{Bool})
+    # Both index_shape and checksize compute sum(I); manually hoist it out
+    N = sum(I)
+    dest = similar(src, (N,))
+    size(dest) == (N,) || throw(DimensionMismatch())
+    c = 1
+    for i = 1:length(I)
+        if unsafe_getindex(I, i)
+            unsafe_setindex!(dest, src[i], c)
+            c += 1
+        end
+    end
+    dest
+end
+
+stagedfunction _getindex{N}(::LinearIndexing, A::AbstractArray, index::CartesianIndex{N})
+    :(@nref $N A d->index[d])
+end
+stagedfunction _unsafe_getindex{N}(::LinearIndexing, A::AbstractArray, index::CartesianIndex{N})
+    :(@ncall $N unsafe_getindex A d->index[d])
+end
+
+# Indexing with just one array is always linear in the source, fast or slow
+# TODO: Use magic to speed up repeated ind2sub calls
+@inline function _unsafe_getindex!(::LinearFast, dest::AbstractArray, ::LinearIndexing, src::AbstractArray, I::AbstractArray)
+    for i=1:length(dest)
+        unsafe_setindex!(dest, getindex(src, unsafe_getindex(I,i)), i)
+    end
+    dest
+end
+@inline function _unsafe_getindex!(::LinearSlow, dest::AbstractArray, ::LinearIndexing, src::AbstractArray, I::AbstractArray)
+    i = 1
+    for d in eachindex(dest)
+        unsafe_setindex!(dest, getindex(src, unsafe_getindex(I,i)), d)
+        i+=1
+    end
+    dest
+end
+# Both fast
+stagedfunction _unsafe_getindex!(::LinearFast, dest::AbstractArray, ::LinearFast, src::AbstractArray, I::Union(Real, AbstractVector, Colon)...)
+    N = length(I)
+    Isplat = Expr[:(I[$d]) for d = 1:N]
+    quote
+        $(Expr(:meta, :inline))
+        stride_1 = 1
+        @nexprs $N d->(stride_{d+1} = stride_d*size(src, d))
+        $(symbol(:offset_, N)) = 1
+        k = 1
+        @nloops $N i dest d->(@inbounds offset_{d-1} = offset_d + (unsafe_getindex(I[d], i_d)-1)*stride_d) begin
+            unsafe_setindex!(dest, unsafe_getindex(src, offset_0), k)
+            k += 1
+        end
+        dest
+    end
+end
+# Fast destination, slow source
+stagedfunction _unsafe_getindex!(::LinearFast, dest::AbstractArray, ::LinearSlow, src::AbstractArray, I::Union(Real, AbstractVector, Colon)...)
+    N = length(I)
+    Isplat = Expr[:(I[$d]) for d = 1:N]
+    quote
+        $(Expr(:meta, :inline))
+        k = 1
+        @nloops $N i dest d->(@inbounds j_d = unsafe_getindex(I[d], i_d)) begin
+            v = @ncall $N unsafe_getindex src j
+            unsafe_setindex!(dest, v, k)
+            k += 1
+        end
+        dest
+    end
+end
+# A slow destination. It's unlikely a fast array would give a slow similar array
+stagedfunction _unsafe_getindex!(::LinearSlow, dest::AbstractArray, ::LinearIndexing, src::AbstractArray, I::Union(Real, AbstractVector, Colon)...)
+    N = length(I)
+    Isplat = Expr[:(I[$d]) for d = 1:N]
+    quote
+        $(Expr(:meta, :inline))
+        @nloops $N i dest d->(@inbounds j_d = unsafe_getindex(I[d], i_d)) begin
+            v = @ncall $N unsafe_getindex src j
+            @ncall $N unsafe_setindex! dest v i
+        end
+        dest
+    end
+end
+
+
+checksize(A::AbstractArray, I::AbstractArray) = true # reshaped linear
+checksize(A::AbstractArray, I...) = checksizedim(A, 1, I...)
+@inline checksizedim(A::AbstractArray, dim, i, I...) = (checksizedim(A, dim, i); checksizedim(A, dim+1, I...))
+@inline checksizedim(A::AbstractArray, dim, I) = size(A, dim) == length(I) || throw(DimensionMismatch("index $dim has length $(length(I)), but size(A, $dim) = $(size(A, dim))"))
+@inline checksizedim(A::AbstractArray, dim, I::AbstractVector{Bool}) = size(A, dim) == sum(I) || throw(DimensionMismatch("index $dim has length $(sum(I)), but size(A, $dim) = $(size(A, dim))"))
+@inline checksizedim(A::AbstractArray, dim, ::Union(Real, Colon)) = true
 
 @inline unsafe_getindex(v::BitArray, ind::Int) = Base.unsafe_bitgetindex(v.chunks, ind)
 
@@ -198,66 +299,6 @@ end
 @inline unsafe_setindex!{T}(v::AbstractArray{T}, x::T, ind::Int) = (v[ind] = x; v)
 @inline unsafe_setindex!(v::BitArray, x::Bool, ind::Int) = (Base.unsafe_bitsetindex!(v.chunks, x, ind); v)
 @inline unsafe_setindex!{T}(v::AbstractArray{T}, x::T, ind::Real) = unsafe_setindex!(v, x, to_index(ind))
-
-# Version that uses cartesian indexing for src
-stagedfunction _getindex!(dest::Array, src::AbstractArray, I::Union(Int,AbstractVector,Colon)...)
-    N = length(I)
-    Isplat = Expr[:(I[$d]) for d = 1:N]
-    quote
-        checksize(dest, $(Isplat...))
-        k = 1
-        @nloops $N i dest d->(@inbounds j_d = unsafe_getindex(I[d], i_d)) begin
-            @inbounds dest[k] = (@nref $N src j)
-            k += 1
-        end
-        dest
-    end
-end
-
-# Version that uses linear indexing for src
-stagedfunction _getindex!(dest::Array, src::Array, I::Union(Int,AbstractVector,Colon)...)
-    N = length(I)
-    Isplat = Expr[:(I[$d]) for d = 1:N]
-    quote
-        checksize(dest, $(Isplat...))
-        stride_1 = 1
-        @nexprs $N d->(stride_{d+1} = stride_d*size(src,d))
-        @nexprs $N d->(offset_d = 1)  # only really need offset_$N = 1
-        k = 1
-        @nloops $N i dest d->(@inbounds offset_{d-1} = offset_d + (unsafe_getindex(I[d], i_d)-1)*stride_d) begin
-            @inbounds dest[k] = src[offset_0]
-            k += 1
-        end
-        dest
-    end
-end
-
-# It's most efficient to call checkbounds first, then to_index, and finally
-# allocate the output. Hence the different variants.
-_getindex(A, I::(Union(Int,AbstractVector,Colon)...)) =
-    _getindex!(similar(A, index_shape(A, I...)), A, I...)
-
-# The stagedfunction here is just to work around the performance hit
-# of splatting
-stagedfunction getindex(A::Array, I::Union(Real,AbstractVector,Colon)...)
-    N = length(I)
-    Isplat = Expr[:(I[$d]) for d = 1:N]
-    quote
-        checkbounds(A, $(Isplat...))
-        _getindex(A, to_index($(Isplat...)))
-    end
-end
-
-# Also a safe version of getindex!
-stagedfunction getindex!(dest, src, I::Union(Real,AbstractVector,Colon)...)
-    N = length(I)
-    Isplat = Expr[:(I[$d]) for d = 1:N]
-    Jsplat = Expr[:(to_index(I[$d])) for d = 1:N]
-    quote
-        checkbounds(src, $(Isplat...))
-        _getindex!(dest, src, $(Jsplat...))
-    end
-end
 
 
 stagedfunction setindex!(A::Array, x, J::Union(Real,AbstractArray,Colon)...)
