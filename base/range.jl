@@ -258,8 +258,6 @@ done(r::UnitRange, i) = i==oftype(i,r.stop)+1
 
 ## indexing
 
-getindex(r::Range, i::Real) = getindex(r, to_index(i))
-
 function getindex{T}(r::Range{T}, i::Integer)
     1 <= i <= length(r) || throw(BoundsError())
     convert(T, first(r) + (i-1)*step(r))
