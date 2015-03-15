@@ -48,9 +48,6 @@ length{I<:CartesianIndex}(::Type{I})=length(super(I))
 # indexing
 getindex(index::CartesianIndex, i::Integer) = getfield(index, i)::Int
 
-stagedfunction getindex{N}(A::Array, index::CartesianIndex{N})
-    N==0 ? :(Base.arrayref(A, 1)) : :(@ncall $N Base.arrayref A d->index[d])
-end
 stagedfunction setindex!{T,N}(A::Array{T}, v, index::CartesianIndex{N})
     N==0 ? :(Base.arrayset(A, convert($T,v), 1)) : :(@ncall $N Base.arrayset A convert($T,v) d->index[d])
 end
@@ -185,7 +182,7 @@ stagedfunction _getindex(l::LinearIndexing, A::AbstractArray, I::Union(Real, Abs
     quote
         $(Expr(:meta, :inline))
         checkbounds(A, $(Isplat...))
-        unsafe_getindex(A, $(Isplat...))
+        _unsafe_getindex(l, A, $(Isplat...))
     end
 end
 stagedfunction _unsafe_getindex(l::LinearIndexing, A::AbstractArray, I::Union(Real, AbstractArray, Colon)...)
@@ -216,10 +213,20 @@ end
     dest
 end
 
-stagedfunction _getindex{N}(::LinearIndexing, A::AbstractArray, index::CartesianIndex{N})
-    :(@nref $N A d->index[d])
+# Each time we call out to the user getindex, we add another function call to
+# the stack. So within the _functions, we only call back out once we've reduced
+# the call the whole way to the canonical override. Performance here is very
+# sensitive.
+stagedfunction _getindex{N}(l::LinearFast, A::AbstractArray, index::CartesianIndex{N})
+    :(@ncall $N _getindex l A d->index[d])
 end
-stagedfunction _unsafe_getindex{N}(::LinearIndexing, A::AbstractArray, index::CartesianIndex{N})
+stagedfunction _getindex{N}(::LinearSlow, A::AbstractArray, index::CartesianIndex{N})
+    :(@ncall $N getindex A d->index[d])
+end
+stagedfunction _unsafe_getindex{N}(l::LinearFast, A::AbstractArray, index::CartesianIndex{N})
+    :(@ncall $N _unsafe_getindex l A d->index[d])
+end
+stagedfunction _unsafe_getindex{N}(::LinearSlow, A::AbstractArray, index::CartesianIndex{N})
     :(@ncall $N unsafe_getindex A d->index[d])
 end
 
@@ -273,6 +280,7 @@ stagedfunction _unsafe_getindex!(::LinearFast, dest::AbstractArray, ::LinearSlow
     end
 end
 # A slow destination. It's unlikely a fast array would give a slow similar array
+# so it's not worth specializing that case.
 stagedfunction _unsafe_getindex!(::LinearSlow, dest::AbstractArray, ::LinearIndexing, src::AbstractArray, I::Union(Real, AbstractVector, Colon)...)
     N = length(I)
     Isplat = Expr[:(I[$d]) for d = 1:N]
