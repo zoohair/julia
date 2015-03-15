@@ -286,12 +286,17 @@ stagedfunction _unsafe_getindex!(::LinearSlow, dest::AbstractArray, ::LinearInde
     end
 end
 
-checksize(A::AbstractArray, I::AbstractArray) = true # reshaped linear
-checksize(A::AbstractArray, I...) = checksizedim(A, 1, I...)
-@inline checksizedim(A::AbstractArray, dim, i, I...) = (checksizedim(A, dim, i); checksizedim(A, dim+1, I...))
-@inline checksizedim(A::AbstractArray, dim, I) = size(A, dim) == length(I) || throw(DimensionMismatch("index $dim has length $(length(I)), but size(A, $dim) = $(size(A, dim))"))
-@inline checksizedim(A::AbstractArray, dim, I::AbstractVector{Bool}) = size(A, dim) == sum(I) || throw(DimensionMismatch("index $dim has length $(sum(I)), but size(A, $dim) = $(size(A, dim))"))
-@inline checksizedim(A::AbstractArray, dim, ::Union(Real, Colon)) = true
+checksize(A::AbstractArray, I::AbstractArray) = true # reshaped linear idx
+stagedfunction checksize(A::AbstractArray, I...)
+    N = length(I)
+    quote
+        @nexprs $N d->(size(A, d) == index_length(A, d, I[d]) || throw(DimensionMismatch("index $d has length $(length(I[d])), but size(A, $d) = $(size(A,d))")))
+    end
+end
+index_length(A::AbstractArray, dim, I) = length(I)
+index_length(A::AbstractArray, dim, I::AbstractVector{Bool}) = sum(I)
+index_length(A::AbstractArray, dim, ::Colon) = size(A, dim)
+index_length(A::AbstractArray, dim, ::Real) = 1
 
 @inline unsafe_getindex(v::BitArray, ind::Int) = Base.unsafe_bitgetindex(v.chunks, ind)
 
