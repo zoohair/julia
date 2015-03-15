@@ -1057,28 +1057,17 @@ function repmat(a::AbstractVector, m::Int)
     return b
 end
 
-sub2ind(dims) = 1
-sub2ind(dims, i::Integer) = Int(i)
-sub2ind(dims, i::Integer, j::Integer) = sub2ind(dims, Int(i), Int(j))
-sub2ind(dims, i::Int, j::Int) = (j-1)*dims[1] + i
-sub2ind(dims, i0::Integer, i1::Integer, i2::Integer) = sub2ind(dims, Int(i0),Int(i1),Int(i2))
-sub2ind(dims, i0::Int, i1::Int, i2::Int) =
-    i0 + dims[1]*((i1-1) + dims[2]*(i2-1))
-sub2ind(dims, i0::Integer, i1::Integer, i2::Integer, i3::Integer) =
-    sub2ind(dims, Int(i0),Int(i1),Int(i2),Int(i3))
-sub2ind(dims, i0::Int, i1::Int, i2::Int, i3::Int) =
-    i0 + dims[1]*((i1-1) + dims[2]*((i2-1) + dims[3]*(i3-1)))
-
-function sub2ind(dims, I::Integer...)
-    ndims = length(dims)
-    index = Int(I[1])
-    stride = 1
-    for k=2:ndims
-        stride = stride * dims[k-1]
-        index += (Int(I[k])-1) * stride
-    end
-    return index
-end
+sub2ind(dims::()) = 1
+sub2ind(dims::(), I::Integer...) = 1 + sum(I) - length(I)
+sub2ind(dims::(Integer,)) = 1
+sub2ind(dims::(Integer,), I::Integer...) = 1 + sum(I) - length(I)
+sub2ind(dims::(Integer,), i1::Integer) = i1
+sub2ind(dims::(Integer,), i1::Integer, I::Integer...) = i1 + sum(I) - length(I)
+sub2ind(dims::(Integer,Integer), i1::Integer) = i1
+sub2ind(dims::(Integer,Integer), i1::Integer, i2::Integer) = i1+dims[1]*(i2-1)
+sub2ind(dims::(Integer,Integer), i1::Integer, i2::Integer, I::Integer...) = i1+dims[1]*(i2-1+sum(I)-length(I))
+sub2ind(dims::(Integer,Integer,Integer...), i1::Integer, i2::Integer, I::Integer...) =
+    i1 + dims[1]*(sub2ind(tail(dims),i2,I...)-1)
 
 function sub2ind{T<:Integer}(dims::Array{T}, sub::Array{T})
     ndims = length(dims)
