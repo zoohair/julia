@@ -474,7 +474,7 @@ setindex!(t::AbstractArray, x) = throw(MethodError(setindex!, (t, x)))
 ## Approach:
 # We only define one fallback method on getindex for all argument types.
 # That dispatches to an (inlined) internal _getindex function, where the goal is
-# to transform the indices such that we can call the only getindex method that 
+# to transform the indices such that we can call the only getindex method that
 # we require AbstractArray subtypes must define, either:
 #       getindex(::T, ::Int) # if linearindexing(T) == LinearFast()
 #       getindex(::T, ::Int, ::Int, #=...ndims(A) indices...=#) if LinearSlow()
@@ -483,12 +483,12 @@ setindex!(t::AbstractArray, x) = throw(MethodError(setindex!, (t, x)))
 # but that isn't as obvious and would require that the function be inlined to
 # avoid allocations.  If the subtype hasn't defined those methods, it goes back
 # to the _getindex function where an error is thrown to prevent stack overflows.
-# 
+#
 # We use the same scheme for unsafe_getindex, with the exception that we can
-# fallback to the safe version if the subtype hasn't defined the required 
+# fallback to the safe version if the subtype hasn't defined the required
 # unsafe method.
 
-stagedfunction getindex(A::AbstractArray, I...) 
+stagedfunction getindex(A::AbstractArray, I...)
     Isplat = Expr[:(I[$d]) for d = 1:length(I)]
     :(_getindex(linearindexing(A), A, $(Isplat...)))
 end
@@ -518,7 +518,7 @@ end
 
 ## LinearFast Scalar indexing
 _getindex(::LinearFast, A::AbstractArray, I::Int) = error("indexing not defined for ", typeof(A))
-stagedfunction _getindex(::LinearFast, A::AbstractArray, I::Int...) 
+stagedfunction _getindex(::LinearFast, A::AbstractArray, I::Int...)
     Isplat = Expr[:(I[$d]) for d = 1:length(I)]
     quote
         $(Expr(:meta, :inline))
