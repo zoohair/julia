@@ -299,48 +299,35 @@ collect(itr) = collect(eltype(itr), itr)
 
 ## Indexing: getindex ##
 
-getindex(a::Array) = arrayref(a,1)
-
-getindex(A::Array, i0::Real) = arrayref(A,to_index(i0))
-getindex(A::Array, i0::Real, i1::Real) = arrayref(A,to_index(i0),to_index(i1))
-getindex(A::Array, i0::Real, i1::Real, i2::Real) =
-    arrayref(A,to_index(i0),to_index(i1),to_index(i2))
-getindex(A::Array, i0::Real, i1::Real, i2::Real, i3::Real) =
-    arrayref(A,to_index(i0),to_index(i1),to_index(i2),to_index(i3))
-getindex(A::Array, i0::Real, i1::Real, i2::Real, i3::Real,  i4::Real) =
-    arrayref(A,to_index(i0),to_index(i1),to_index(i2),to_index(i3),to_index(i4))
-getindex(A::Array, i0::Real, i1::Real, i2::Real, i3::Real,  i4::Real, i5::Real) =
-    arrayref(A,to_index(i0),to_index(i1),to_index(i2),to_index(i3),to_index(i4),to_index(i5))
-
-getindex(A::Array, i0::Real, i1::Real, i2::Real, i3::Real,  i4::Real, i5::Real, I::Real...) =
-    arrayref(A,to_index(i0),to_index(i1),to_index(i2),to_index(i3),to_index(i4),to_index(i5),to_index(I)...)
-
+getindex(A::Array, i::Int) = arrayref(A, i)
 unsafe_getindex(A::Array, i::Int) = @inbounds return arrayref(A, i)
 
 # Fast copy using copy! for UnitRange and Colon
-function getindex(A::Array, I::UnitRange{Int})
-    lI = length(I)
-    X = similar(A, lI)
-    copy!(X, 1, A, first(I), lI)
-    return X
-end
-function unsafe_getindex(A::Array, I::UnitRange{Int})
-    lI = length(I)
-    X = similar(A, lI)
-    if lI > 0
-        unsafe_copy!(X, 1, A, first(I), lI)
-    end
-    return X
-end
-getindex(A::Array, c::Colon) = unsafe_getindex(A, c)
-function unsafe_getindex(A::Array, ::Colon)
-    lI = length(A)
-    X = similar(A, lI)
-    if lI > 0
-        unsafe_copy!(X, 1, A, 1, lI)
-    end
-    return X
-end
+# This will outperform abstract fallbacks, but disabled for now as a stress test
+# TODO: re-enable this!
+# function getindex(A::Array, I::UnitRange{Int})
+#     lI = length(I)
+#     X = similar(A, lI)
+#     copy!(X, 1, A, first(I), lI)
+#     return X
+# end
+# function unsafe_getindex(A::Array, I::UnitRange{Int})
+#     lI = length(I)
+#     X = similar(A, lI)
+#     if lI > 0
+#         unsafe_copy!(X, 1, A, first(I), lI)
+#     end
+#     return X
+# end
+# getindex(A::Array, c::Colon) = unsafe_getindex(A, c)
+# function unsafe_getindex(A::Array, ::Colon)
+#     lI = length(A)
+#     X = similar(A, lI)
+#     if lI > 0
+#         unsafe_copy!(X, 1, A, 1, lI)
+#     end
+#     return X
+# end
 
 # This is superfluous with the abstract fallbacks, but needed for bootstrap
 function getindex{T<:Real}(A::Array, I::Range{T})
