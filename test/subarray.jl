@@ -266,34 +266,49 @@ end
 # indexN is a cartesian index, indexNN is a linear index for 2 dimensions, and indexNNN is a linear index for 3 dimensions
 function runviews{T}(SB::AbstractArray{T,3}, indexN, indexNN, indexNNN)
     for i3 in indexN, i2 in indexN, i1 in indexN
-        runtests(SB, i1, i2, i3)
+        if rand() < testfraction
+            runtests(SB, i1, i2, i3)
+        end
     end
     for i2 in indexNN, i1 in indexN
-        runtests(SB, i1, i2)
+        if rand() < testfraction
+            runtests(SB, i1, i2)
+        end
     end
     for i1 in indexNNN
-        runtests(SB, i1)
+        if rand() < testfraction
+            runtests(SB, i1)
+        end
     end
 end
 
 function runviews{T}(SB::AbstractArray{T,2}, indexN, indexNN, indexNNN)
     for i2 in indexN, i1 in indexN
-        runtests(SB, i1, i2)
+        if rand() < testfraction
+            runtests(SB, i1, i2)
+        end
     end
     for i1 in indexNN
-        runtests(SB, i1)
+        if rand() < testfraction
+            runtests(SB, i1)
+        end
     end
 end
 
 function runviews{T}(SB::AbstractArray{T,1}, indexN, indexNN, indexNNN)
     for i1 in indexN
-        runtests(SB, i1)
+        if rand() < testfraction
+            runtests(SB, i1)
+        end
     end
 end
 
 runviews{T}(SB::AbstractArray{T,0}, indexN, indexNN, indexNNN) = nothing
 
 ######### Tests #########
+
+testfraction = parsefloat(get(ENV, "testfraction", "0.025"))
+srand()
 
 ### Views from Arrays ###
 
@@ -310,10 +325,13 @@ end
 # "outer" indexes create snips that have at least size 5 along each dimension, with the exception of Int-slicing
 oindex = (:, 6, 3:7, 13:-2:1, [8,4,6,12,5,7])
 
+testfraction = sqrt(testfraction)  # overall fraction will be the product, so this preserves accuracy
 let B = reshape(1:13^3, 13, 13, 13)
     for o3 in oindex, o2 in oindex, o1 in oindex
-        sliceB = slice(B, o1, o2, o3)
-        runviews(sliceB, index5, index25, index125)
+        if rand() < testfraction
+            sliceB = slice(B, o1, o2, o3)
+            runviews(sliceB, index5, index25, index125)
+        end
     end
 end
 
