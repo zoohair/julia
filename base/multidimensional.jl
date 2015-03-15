@@ -217,12 +217,14 @@ end
 # the stack. So within the _functions, we only call back out once we've reduced
 # the call the whole way to the canonical override. Performance here is very
 # sensitive.
+_getindex(::LinearFast, A::AbstractArray, index::CartesianIndex{1}) = getindex(A, index[1])
 stagedfunction _getindex{N}(l::LinearFast, A::AbstractArray, index::CartesianIndex{N})
     :(@ncall $N _getindex l A d->index[d])
 end
 stagedfunction _getindex{N}(::LinearSlow, A::AbstractArray, index::CartesianIndex{N})
     :(@ncall $N getindex A d->index[d])
 end
+_unsafe_getindex(::LinearFast, A::AbstractArray, index::CartesianIndex{1}) = unsafe_getindex(A, index[1])
 stagedfunction _unsafe_getindex{N}(l::LinearFast, A::AbstractArray, index::CartesianIndex{N})
     :(@ncall $N _unsafe_getindex l A d->index[d])
 end
