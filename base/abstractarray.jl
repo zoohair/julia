@@ -596,7 +596,7 @@ end
 
 
 ## Setindex! is defined similarly:
-unsafe_setindex!(A::AbstractArray, v, I...) = setindex!(A::AbstractArray, v, I...)
+unsafe_setindex!(A::AbstractArray, v, I...) = @inbounds return setindex!(A, v, I...)
 ## get (getindex with a default value) ##
 
 typealias RangeVecIntList{A<:AbstractVector{Int}} Union((Union(Range, AbstractVector{Int})...), AbstractVector{UnitRange{Int}}, AbstractVector{Range{Int}}, AbstractVector{A})
