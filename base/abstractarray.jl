@@ -490,11 +490,11 @@ setindex!(t::AbstractArray, x) = throw(MethodError(setindex!, (t, x)))
 
 stagedfunction getindex(A::AbstractArray, I...)
     Isplat = Expr[:(I[$d]) for d = 1:length(I)]
-    :(_getindex(linearindexing(A), A, $(Isplat...)))
+    :($(Expr(:meta, :inline)); _getindex(linearindexing(A), A, $(Isplat...)))
 end
 stagedfunction unsafe_getindex(A::AbstractArray, I...)
     Isplat = Expr[:(I[$d]) for d = 1:length(I)]
-    :(_unsafe_getindex(linearindexing(A), A, $(Isplat...)))
+    :($(Expr(:meta, :inline)); _unsafe_getindex(linearindexing(A), A, $(Isplat...)))
 end
 ## Internal defitions
 _getindex(::LinearFast, A::AbstractArray) = getindex(A, 1)

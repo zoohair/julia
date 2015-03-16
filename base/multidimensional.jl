@@ -219,17 +219,17 @@ end
 # sensitive.
 _getindex(::LinearFast, A::AbstractArray, index::CartesianIndex{1}) = getindex(A, index[1])
 stagedfunction _getindex{N}(l::LinearFast, A::AbstractArray, index::CartesianIndex{N})
-    :(@ncall $N _getindex l A d->index[d])
+    :($(Expr(:meta, :inline)); @ncall $N _getindex l A d->index[d])
 end
 stagedfunction _getindex{N}(::LinearSlow, A::AbstractArray, index::CartesianIndex{N})
-    :(@ncall $N getindex A d->index[d])
+    :($(Expr(:meta, :inline)); @ncall $N getindex A d->index[d])
 end
 _unsafe_getindex(::LinearFast, A::AbstractArray, index::CartesianIndex{1}) = unsafe_getindex(A, index[1])
 stagedfunction _unsafe_getindex{N}(l::LinearFast, A::AbstractArray, index::CartesianIndex{N})
-    :(@ncall $N _unsafe_getindex l A d->index[d])
+    :($(Expr(:meta, :inline)); @ncall $N _unsafe_getindex l A d->index[d])
 end
 stagedfunction _unsafe_getindex{N}(::LinearSlow, A::AbstractArray, index::CartesianIndex{N})
-    :(@ncall $N unsafe_getindex A d->index[d])
+    :($(Expr(:meta, :inline)); @ncall $N unsafe_getindex A d->index[d])
 end
 
 # Indexing with just one array is always linear in the source, fast or slow
@@ -254,7 +254,6 @@ stagedfunction _unsafe_getindex!(::LinearFast, dest::AbstractArray, ::LinearFast
     N = length(I)
     Isplat = Expr[:(I[$d]) for d = 1:N]
     quote
-        $(Expr(:meta, :inline))
         stride_1 = 1
         @nexprs $N d->(stride_{d+1} = stride_d*size(src, d))
         $(symbol(:offset_, N)) = 1
@@ -271,7 +270,6 @@ stagedfunction _unsafe_getindex!(::LinearFast, dest::AbstractArray, ::LinearSlow
     N = length(I)
     Isplat = Expr[:(I[$d]) for d = 1:N]
     quote
-        $(Expr(:meta, :inline))
         k = 1
         @nloops $N i dest d->(@inbounds j_d = unsafe_getindex(I[d], i_d)) begin
             v = @ncall $N unsafe_getindex src j
@@ -287,7 +285,6 @@ stagedfunction _unsafe_getindex!(::LinearSlow, dest::AbstractArray, ::LinearInde
     N = length(I)
     Isplat = Expr[:(I[$d]) for d = 1:N]
     quote
-        $(Expr(:meta, :inline))
         @nloops $N i dest d->(@inbounds j_d = unsafe_getindex(I[d], i_d)) begin
             v = @ncall $N unsafe_getindex src j
             @ncall $N unsafe_setindex! dest v i
