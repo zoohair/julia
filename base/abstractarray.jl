@@ -501,25 +501,13 @@ _getindex(::LinearFast, A::AbstractArray) = getindex(A, 1)
 _getindex(::LinearSlow, A::AbstractArray) = _getindex(A, 1)
 _unsafe_getindex(::LinearFast, A::AbstractArray) = unsafe_getindex(A, 1)
 _unsafe_getindex(::LinearSlow, A::AbstractArray) = _unsafe_getindex(A, 1)
-stagedfunction _getindex(l::LinearIndexing, A::AbstractArray, I...)
-    Isplat = Expr[:(to_index(I[$d])) for d = 1:length(I)]
-    quote
-        $(Expr(:meta, :inline))
-        _getindex(l, A, $(Isplat...))
-    end
-end
-stagedfunction _unsafe_getindex(l::LinearIndexing, A::AbstractArray, I...)
-    Isplat = Expr[:(to_index(I[$d])) for d = 1:length(I)]
-    quote
-        $(Expr(:meta, :inline))
-        _unsafe_getindex(l, A, $(Isplat...))
-    end
-end
+_getindex(::LinearIndexing, A::AbstractArray, I...) = error("indexing $(typeof(A)) with types $(typeof(I)) is not supported")
+_unsafe_getindex(::LinearIndexing, A::AbstractArray, I...) = error("indexing $(typeof(A)) with types $(typeof(I)) is not supported")
 
 ## LinearFast Scalar indexing
 _getindex(::LinearFast, A::AbstractArray, I::Int) = error("indexing not defined for ", typeof(A))
-stagedfunction _getindex(::LinearFast, A::AbstractArray, I::Int...)
-    Isplat = Expr[:(I[$d]) for d = 1:length(I)]
+stagedfunction _getindex(::LinearFast, A::AbstractArray, I::Real...)
+    Isplat = Expr[:(to_index(I[$d])) for d = 1:length(I)]
     quote
         $(Expr(:meta, :inline))
         # We must check bounds for sub2ind; so we can then call unsafe_getindex
@@ -528,8 +516,8 @@ stagedfunction _getindex(::LinearFast, A::AbstractArray, I::Int...)
     end
 end
 _unsafe_getindex(::LinearFast, A::AbstractArray, I::Int) = getindex(A, I)
-stagedfunction _unsafe_getindex(::LinearFast, A::AbstractArray, I::Int...)
-    Isplat = Expr[:(I[$d]) for d = 1:length(I)]
+stagedfunction _unsafe_getindex(::LinearFast, A::AbstractArray, I::Real...)
+    Isplat = Expr[:(to_index(I[$d])) for d = 1:length(I)]
     quote
         $(Expr(:meta, :inline))
         unsafe_getindex(A, sub2ind(size(A), $(Isplat...)))
@@ -537,14 +525,14 @@ stagedfunction _unsafe_getindex(::LinearFast, A::AbstractArray, I::Int...)
 end
 
 # LinearSlow Scalar indexing
-stagedfunction _getindex{T,AN}(::LinearSlow, A::AbstractArray{T,AN}, I::Int...)
+stagedfunction _getindex{T,AN}(::LinearSlow, A::AbstractArray{T,AN}, I::Real...)
     N = length(I)
     if N == AN
         :(error("indexing not defined for ", typeof(A)))
     elseif N > AN
         # Drop trailing ones
-        Isplat = Expr[:(I[$d]) for d = 1:AN]
-        Osplat = Expr[:(I[$d] == 1) for d = AN+1:N]
+        Isplat = Expr[:(to_index(I[$d])) for d = 1:AN]
+        Osplat = Expr[:(to_index(I[$d]) == 1) for d = AN+1:N]
         quote
             $(Expr(:meta, :inline))
             (&)($(Osplat...)) || throw(BoundsError(A, I))
@@ -552,7 +540,7 @@ stagedfunction _getindex{T,AN}(::LinearSlow, A::AbstractArray{T,AN}, I::Int...)
         end
     else
         # Expand the last index into the appropriate number of indices
-        Isplat = Expr[:(I[$d]) for d = 1:N-1]
+        Isplat = Expr[:(to_index(I[$d])) for d = 1:N-1]
         i = 0
         for d=N:AN
             push!(Isplat, :(s[$(i+=1)]))
@@ -561,26 +549,26 @@ stagedfunction _getindex{T,AN}(::LinearSlow, A::AbstractArray{T,AN}, I::Int...)
         sz.args = Expr[:(size(A, $d)) for d=N:AN]
         quote
             $(Expr(:meta, :inline))
-            s = ind2sub($sz, I[$N])
+            s = ind2sub($sz, to_index(I[$N]))
             getindex(A, $(Isplat...))
         end
     end
 end
-stagedfunction _unsafe_getindex{T,AN}(::LinearSlow, A::AbstractArray{T,AN}, I::Int...)
+stagedfunction _unsafe_getindex{T,AN}(::LinearSlow, A::AbstractArray{T,AN}, I::Real...)
     N = length(I)
     if N == AN
-        Isplat = Expr[:(I[$d]) for d = 1:N]
+        Isplat = Expr[:(to_index(I[$d])) for d = 1:N]
         :(getindex(A, $(Isplat...)))
     elseif N > AN
         # Drop trailing dimensions (unchecked)
-        Isplat = Expr[:(I[$d]) for d = 1:AN]
+        Isplat = Expr[:(to_index(I[$d])) for d = 1:AN]
         quote
             $(Expr(:meta, :inline))
             unsafe_getindex(A, $(Isplat...))
         end
     else
         # Expand the last index into the appropriate number of indices
-        Isplat = Expr[:(I[$d]) for d = 1:N-1]
+        Isplat = Expr[:(to_index(I[$d])) for d = 1:N-1]
         for d=N:AN
             push!(Isplat, :(s[$(d-N+1)]))
         end
@@ -588,7 +576,7 @@ stagedfunction _unsafe_getindex{T,AN}(::LinearSlow, A::AbstractArray{T,AN}, I::I
         sz.args = Expr[:(size(A, $d)) for d=N:AN]
         quote
             $(Expr(:meta, :inline))
-            s = ind2sub($sz, I[$N])
+            s = ind2sub($sz, to_index(I[$N]))
             unsafe_getindex(A, $(Isplat...))
         end
     end
