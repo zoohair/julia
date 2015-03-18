@@ -52,6 +52,12 @@ const VALUE_TAGS = ser_tag[()]
 const EMPTY_TUPLE_TAG = ser_tag[()]
 const ZERO_TAG = ser_tag[0]
 const INT_TAG = ser_tag[Int]
+const UNDEF_TAG = ser_tag[UndefRefTag]
+const TUPLE_TAG = ser_tag[Tuple]
+const LONGTUPLE_TAG = ser_tag[LongTuple]
+const BACKREF_TAG = ser_tag[BackrefTag]
+const ARRAY_TAG = ser_tag[Array]
+const DATATYPE_TAG = ser_tag[DataType]
 
 writetag(s::IO, x) = write(s, UInt8(ser_tag[x]))
 
@@ -339,13 +345,13 @@ function serialize(s::Serializer, x)
     if haskey(ser_tag,x)
         return write_as_tag(s.io, x)
     end
-    t = typeof(x)
+    t = typeof(x)::DataType
     nf = nfields(t)
     if nf == 0 && t.size > 0
         serialize_type(s, t)
         write(s.io, x)
     else
-        serialize_cycle(s, x) && return
+        t.mutable && serialize_cycle(s, x) && return
         serialize_type(s, t)
         for i in 1:nf
             if isdefined(x, i)
@@ -380,24 +386,23 @@ function handle_deserialize(s::Serializer, b::Int32)
     if b == 0
         return deser_tag[Int32(read(s.io, UInt8)::UInt8)]
     end
-    tag = deser_tag[b]
     if b >= VALUE_TAGS
-        return tag
-    elseif tag === Tuple
+        return deser_tag[b]
+    elseif b == TUPLE_TAG
         len = Int32(read(s.io, UInt8)::UInt8)
         return deserialize_tuple(s, len)
-    elseif tag === LongTuple
+    elseif b == LONGTUPLE_TAG
         len = read(s.io, Int32)::Int32
         return deserialize_tuple(s, len)
-    elseif tag === BackrefTag
+    elseif b == BACKREF_TAG
         id = read(s.io, Int)::Int
         return s.table[id]
-    elseif tag === Array
+    elseif b == ARRAY_TAG
         return deserialize_array(s)
-    elseif tag === DataType
+    elseif b == DATATYPE_TAG
         return deserialize_datatype(s)
     end
-    return deserialize(s, tag)
+    return deserialize(s, deser_tag[b])
 end
 
 deserialize_tuple(s::Serializer, len) = ntuple(len, i->deserialize(s))
@@ -497,8 +502,7 @@ function deserialize_array(s::Serializer)
     end
     if isa(d1,Integer)
         if elty !== Bool && isbits(elty)
-            A = Array(elty, d1)
-            return read!(s.io, A)
+            return read!(s.io, Array(elty, d1))
         end
         dims = (Int(d1),)
     else
@@ -527,7 +531,7 @@ function deserialize_array(s::Serializer)
     deserialize_cycle(s, A)
     for i = 1:length(A)
         tag = Int32(read(s.io, UInt8)::UInt8)
-        if tag==0 || !is(deser_tag[tag], UndefRefTag)
+        if tag != UNDEF_TAG
             A[i] = handle_deserialize(s, tag)
         end
     end
@@ -569,9 +573,6 @@ function deserialize_datatype(s::Serializer)
     end
     if form == 0
         return t
-    end
-    if applicable(deserialize, s, t)
-        return deserialize(s, t)
     end
     deserialize(s, t)
 end
@@ -616,10 +617,10 @@ function deserialize(s::Serializer, t::DataType)
         end
     else
         x = ccall(:jl_new_struct_uninit, Any, (Any,), t)
-        deserialize_cycle(s, x)
+        t.mutable && deserialize_cycle(s, x)
         for i in 1:nf
             tag = Int32(read(s.io, UInt8)::UInt8)
-            if tag==0 || !is(deser_tag[tag], UndefRefTag)
+            if tag != UNDEF_TAG
                 ccall(:jl_set_nth_field, Void, (Any, Csize_t, Any), x, i-1, handle_deserialize(s, tag))
             end
         end
